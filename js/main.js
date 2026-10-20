@@ -32,7 +32,8 @@ async function start() {
   window.__pt = { store, ui: view.ui, adapter };
 
   if (demo && params.get('auto') === '1') {
-    await store.login(1, window.__pt_demo.password);
+    if (params.get('empty') === '1') await store.setup(1, window.__pt_demo.password); // 앱이 하나도 없는 시험 화면
+    else await store.login(1, window.__pt_demo.password);
   } else {
     store.state.phase = 'boot'; view.render();
     const resumed = await store.resume();

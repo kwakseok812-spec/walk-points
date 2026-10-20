@@ -194,11 +194,12 @@ export function createUI({ root, store, haptics = true, onReload }) {
     const fapp = ui.filterApp === 'all' ? null : S.apps.find((a) => a.id === ui.filterApp);
     const manage = fapp ? `<div class="manage"><button class="mini ghost press" data-act="rename-app" data-id="${fapp.id}">이름 바꾸기</button><button class="mini ghost danger press" data-act="remove-app" data-id="${fapp.id}">이 앱 없애기</button></div>` : '';
     const trashCount = store.trashItems().length;
-    return `<main class="page"><header class="bar"><button class="back press" data-act="go-home" aria-label="뒤로">${ICON.back}<span>처음 화면</span></button></header>
+    return `<main class="page has-bottom"><header class="bar"><button class="back press" data-act="go-home" aria-label="뒤로">${ICON.back}<span>처음 화면</span></button></header>
       <h1 class="page-title">기록 보기</h1>${banners()}
       <div class="chips" role="tablist">${chips}</div>${manage}
       <section class="list">${rows || '<p class="muted pad">아직 기록이 없습니다.</p>'}</section>
-      <button class="big-btn press trash-link" data-act="go-trash">휴지통${trashCount ? ` <span class="count-badge">${trashCount}</span>` : ''}</button>${undoBarHtml()}</main>`;
+      <button class="big-btn press trash-link" data-act="go-trash">휴지통${trashCount ? ` <span class="count-badge">${trashCount}</span>` : ''}</button>${undoBarHtml()}
+      <nav class="bottom three"><button class="big-btn press" data-act="rec-add-log">기록 추가</button><button class="big-btn press" data-act="rec-add-spend">사용 추가</button><button class="big-btn primary press" data-act="add-app">앱 추가</button></nav></main>`;
   }
 
   function trashHtml() {
@@ -230,8 +231,8 @@ export function createUI({ root, store, haptics = true, onReload }) {
 
   function dateChip(sh) {
     const t = todayStr();
-    const label = sh.date === t ? `오늘 ${C.fmtMD(sh.date)}` : `${C.fmtMD(sh.date)} (${C.fmtLongDate(sh.date).slice(-2, -1)}요일)`;
-    return `<label class="chip-date press">${esc(label)} ${ICON.caret}<input type="date" data-keep="date" data-restore="0" value="${sh.date}" max="${t}" aria-label="날짜 바꾸기"></label>`;
+    const label = sh.date === t ? `날짜: 오늘 ${C.fmtMD(sh.date)}` : `날짜: ${C.fmtMD(sh.date)} (${C.fmtLongDate(sh.date).slice(-2, -1)}요일)`;
+    return `<label class="chip-date press">${esc(label)} <span class="chg">· 바꾸기</span> ${ICON.caret}<input type="date" data-keep="date" data-restore="0" value="${sh.date}" max="${t}" aria-label="날짜 바꾸기"></label>`;
   }
 
   function tabsHtml(sh) {
@@ -249,6 +250,7 @@ export function createUI({ root, store, haptics = true, onReload }) {
     else if (sh.kind === 'edit-spend') { title = '사용 고치기'; inner = editSpendSheet(sh); }
     else if (sh.kind === 'rename') { title = '이름 바꾸기'; inner = renameSheet(sh); }
     else if (sh.kind === 'saved') { title = ''; inner = savedSheet(sh); }
+    else if (sh.kind === 'pickapp') { title = sh.mode === 'spend' ? '사용 추가' : '기록 추가'; inner = pickAppSheet(sh); }
     else if (sh.kind === 'font') { title = '글씨 크기'; inner = fontSheet(); }
     else if (sh.kind === 'pwchange') { title = '비밀번호 바꾸기'; inner = pwSheet(sh); }
     return { title, inner };
@@ -283,7 +285,7 @@ export function createUI({ root, store, haptics = true, onReload }) {
     const display = sh.digits ? num(total) : '<span class="ph">앱 화면의 총 포인트</span>';
     return `${tabsHtml(sh)}<div class="row-between">${dateChip(sh)}${prevLine}</div>
       <div class="display" aria-live="polite">${display}</div><div class="preview">${pv}</div>${warn}${errLine(sh)}
-      ${numpadHtml()}<button class="big-btn primary press" data-act="save-log" ${ui.busy ? 'disabled' : ''}>${ui.busy ? '저장 중…' : '저장'}</button>`;
+      ${numpadHtml()}<button class="big-btn primary press sticky-save" data-act="save-log" ${ui.busy ? 'disabled' : ''}>${ui.busy ? '저장 중…' : '저장'}</button>`;
   }
 
   function spendSheet(sh) {
@@ -297,7 +299,7 @@ export function createUI({ root, store, haptics = true, onReload }) {
     return `${tabsHtml(sh)}<div class="row-between">${dateChip(sh)}<div class="prev-line">${pv}</div></div>
       <div class="chips mini-chips">${chips}</div>
       <div class="display" aria-live="polite"><span class="minus">-</span>${display}</div>${errLine(sh)}
-      ${numpadHtml()}<button class="big-btn primary press" data-act="save-spend" ${ui.busy ? 'disabled' : ''}>${ui.busy ? '저장 중…' : '사용 기록'}</button>`;
+      ${numpadHtml()}<button class="big-btn primary press sticky-save" data-act="save-spend" ${ui.busy ? 'disabled' : ''}>${ui.busy ? '저장 중…' : '사용 기록'}</button>`;
   }
 
   function addAppSheet(sh) {
@@ -309,7 +311,7 @@ export function createUI({ root, store, haptics = true, onReload }) {
       <input class="input" data-keep="appname" data-restore="0" type="text" maxlength="30" placeholder="앱 이름을 직접 적기" value="${esc(sh.name)}" autocomplete="off">
       <p class="hint">앱 화면에 보이는 <b>총 포인트</b>를 그대로 적으세요.</p>
       <div class="display" aria-live="polite">${display}</div>${errLine(sh)}${numpadHtml()}
-      <button class="big-btn primary press" data-act="save-app" ${ui.busy ? 'disabled' : ''}>${ui.busy ? '저장 중…' : '추가'}</button>`;
+      <button class="big-btn primary press sticky-save" data-act="save-app" ${ui.busy ? 'disabled' : ''}>${ui.busy ? '저장 중…' : '추가'}</button>`;
   }
 
   function historyHtml(sh, kind) {
@@ -337,7 +339,7 @@ export function createUI({ root, store, haptics = true, onReload }) {
     return `<div class="row-between"><div class="prev-line"><b>${esc(appName(log.app_id))}</b></div>${dateChip(sh)}</div>
       <div class="display" aria-live="polite">${display}</div><div class="preview">${pv}</div>
       ${later && sh.date < todayStr() ? `<p class="notice small">고치면 이후 ${later}일의 차이도 다시 계산됩니다.</p>` : ''}${pending}${errLine(sh)}
-      ${numpadHtml()}<div class="two-btn"><button class="big-btn danger press" data-act="delete-log" ${ui.busy ? 'disabled' : ''}>지우기</button><button class="big-btn primary press" data-act="save-edit-log" ${ui.busy ? 'disabled' : ''}>저장</button></div>
+      ${numpadHtml()}<div class="two-btn sticky-save"><button class="big-btn danger press" data-act="delete-log" ${ui.busy ? 'disabled' : ''}>지우기</button><button class="big-btn primary press" data-act="save-edit-log" ${ui.busy ? 'disabled' : ''}>저장</button></div>
       <h3 class="sub-h">이전 값</h3>${historyHtml(sh, 'log')}`;
   }
 
@@ -350,13 +352,13 @@ export function createUI({ root, store, haptics = true, onReload }) {
     return `<div class="row-between"><div class="prev-line"><b>${esc(appName(sp.app_id))}</b></div>${dateChip(sh)}</div>
       <div class="chips mini-chips">${chips}</div>
       <div class="display"><span class="minus">-</span>${display}</div>${errLine(sh)}
-      ${numpadHtml()}<div class="two-btn"><button class="big-btn danger press" data-act="delete-spend" ${ui.busy ? 'disabled' : ''}>지우기</button><button class="big-btn primary press" data-act="save-edit-spend" ${ui.busy ? 'disabled' : ''}>저장</button></div>
+      ${numpadHtml()}<div class="two-btn sticky-save"><button class="big-btn danger press" data-act="delete-spend" ${ui.busy ? 'disabled' : ''}>지우기</button><button class="big-btn primary press" data-act="save-edit-spend" ${ui.busy ? 'disabled' : ''}>저장</button></div>
       <h3 class="sub-h">이전 값</h3>${historyHtml(sh, 'spend')}`;
   }
 
   function renameSheet(sh) {
     return `<input class="input" data-keep="newname" data-restore="0" data-autofocus type="text" maxlength="30" value="${esc(sh.name)}" autocomplete="off">${errLine(sh)}
-      <button class="big-btn primary press" data-act="save-rename" ${ui.busy ? 'disabled' : ''}>저장</button>`;
+      <button class="big-btn primary press sticky-save" data-act="save-rename" ${ui.busy ? 'disabled' : ''}>저장</button>`;
   }
 
   function savedSheet(sh) {
@@ -376,6 +378,11 @@ export function createUI({ root, store, haptics = true, onReload }) {
       ${undoBtn}<button class="big-btn ${next ? '' : 'primary'} press" data-act="close-sheet">${next ? '여기까지만 하기' : '닫기'}</button></div>`;
   }
 
+  function pickAppSheet(sh) {
+    const btns = store.activeApps().map((a) => `<button class="big-btn press pick-app" data-act="pick-app-go" data-id="${a.id}">${esc(a.name)}</button>`).join('');
+    return `<p class="lead small-lead">어느 앱인가요?</p><div class="stack">${btns}</div>`;
+  }
+
   function fontSheet() {
     const b = (k, sz) => `<button class="font-opt press ${S.settings.font === k ? 'on' : ''}" data-act="set-font-first" data-v="${k}"><span class="fo-name">${FONT_LABEL[k]}</span><span class="fo-sample" style="font-size:${sz}px">12,345</span></button>`;
     return `<p class="lead small-lead">글씨 크기를 고르세요.<br><span class="muted">나중에 설정에서 바꿀 수 있습니다.</span></p>${b('normal', 22)}${b('large', 28)}${b('xlarge', 34)}`;
@@ -385,7 +392,7 @@ export function createUI({ root, store, haptics = true, onReload }) {
     return `<p class="hint">새 비밀번호는 4자 이상이면 되지만 6자 이상을 권장합니다.</p><label class="field"><span class="lbl">지금 비밀번호</span><input class="input" data-keep="pwcur" data-restore="0" type="password" autocomplete="off"></label>
       <label class="field"><span class="lbl">새 비밀번호</span><input class="input" data-keep="pwnew" data-restore="0" type="password" autocomplete="off"></label>
       <label class="field"><span class="lbl">새 비밀번호 한 번 더</span><input class="input" data-keep="pwnew2" data-restore="0" type="password" autocomplete="off"></label>
-      ${errLine(sh)}<button class="big-btn primary press" data-act="save-pw" ${ui.busy ? 'disabled' : ''}>바꾸기</button>`;
+      ${errLine(sh)}<button class="big-btn primary press sticky-save" data-act="save-pw" ${ui.busy ? 'disabled' : ''}>바꾸기</button>`;
   }
 
   /* ---------------------------- 확인창 ---------------------------- */
@@ -702,6 +709,17 @@ export function createUI({ root, store, haptics = true, onReload }) {
     }
   }
 
+  /** 기록 보기 아래 줄의 [기록 추가]/[사용 추가]: 앱 필터가 있으면 그 앱, 앱이 하나뿐이면 그 앱, 아니면 앱을 고르는 시트 */
+  function recAdd(mode) {
+    store.clearUndo();
+    const apps = store.activeApps();
+    if (!apps.length) return openSheet({ kind: 'addapp', name: '', digits: '' });
+    const pick = ui.filterApp !== 'all' && apps.find((a) => a.id === ui.filterApp) ? ui.filterApp : (apps.length === 1 ? apps[0].id : null);
+    if (!pick) return openSheet({ kind: 'pickapp', mode });
+    if (mode === 'spend') return openSheet({ kind: 'spend', appId: pick, date: todayStr(), digits: '', memo: '현금 전환' });
+    return openLog(pick);
+  }
+
   /* ============================== 클릭 분배 ============================== */
   const actions = {
     noop() {},
@@ -723,6 +741,9 @@ export function createUI({ root, store, haptics = true, onReload }) {
     'open-app': (el) => { store.clearUndo(); openLog(el.dataset.id); },
     'add-app': () => { store.clearUndo(); openSheet({ kind: 'addapp', name: '', digits: '' }); },
     'close-sheet': () => closeSheet(),
+    'rec-add-log': () => recAdd('log'),
+    'rec-add-spend': () => recAdd('spend'),
+    'pick-app-go': (el) => { const sh = ui.sheet; switchSheet(sh.mode === 'spend' ? { kind: 'spend', appId: el.dataset.id, date: todayStr(), digits: '', memo: '현금 전환' } : { kind: 'log', appId: el.dataset.id, date: todayStr(), digits: '' }); },
     tab: (el) => {
       const sh = ui.sheet; const v = el.dataset.v;
       if (v === 'history') { ui.filterApp = sh.appId; ui.screen = 'records'; closeSheet(); return; }
@@ -804,6 +825,10 @@ export function createUI({ root, store, haptics = true, onReload }) {
     if (ui.dialog && el.dataset.act !== 'dlg') return;
     const fn = actions[el.dataset.act];
     if (fn) { Promise.resolve(fn(el)).catch((e) => { console.error(e); ui.busy = false; rerender(); }); }
+  });
+  root.addEventListener('focusin', (ev) => { // 키보드가 올라오면 입력 칸이 키보드 위에 보이도록
+    const t = ev.target;
+    if (t.matches && t.matches('.sheet input[type="text"], .sheet input[type="password"]')) setTimeout(() => { try { t.scrollIntoView({ block: 'center' }); } catch { /* 무시 */ } }, 320);
   });
   root.addEventListener('keydown', (ev) => {
     if (ev.key === 'Enter' && ev.target.matches && ev.target.matches('[data-keep="pw1"], [data-keep="pw2"]')) { ev.preventDefault(); doLogin(); }
