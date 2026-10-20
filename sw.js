@@ -1,11 +1,11 @@
 // sw.js - 화면 파일을 폰에 저장해 두어 접속이 느리거나 끊겨도 화면이 열리게 합니다.
 // 화면 파일을 바꿔 올릴 때는 config.js 의 APP_BUILD 와 아래 CACHE 숫자를 함께 올립니다.
-const CACHE = 'pt-shell-v1';
+const CACHE = 'pt-shell-v2';
 const SHELL = [
   './', './index.html', './manifest.webmanifest', './css/app.css',
   './js/main.js', './js/config.js', './js/data.js', './js/store.js', './js/ui.js', './js/calc.js',
   './supabase/functions/pt-auth/logic.js',
-  './icons/icon-192.png', './icons/icon-512.png', './icons/icon-maskable-512.png',
+  './icons/icon-192.png', './icons/favicon-32.png', './icons/apple-touch-180.png', './icons/icon-512.png', './icons/icon-maskable-512.png',
 ];
 
 self.addEventListener('install', (e) => {

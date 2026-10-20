@@ -7,7 +7,7 @@ export const SUPABASE_URL = 'https://YOUR-PROJECT-REF.supabase.co';
 export const SUPABASE_ANON_KEY = 'YOUR-ANON-PUBLIC-KEY';
 
 // 화면 파일을 바꿔 올릴 때마다 올립니다. (서비스워커 캐시 이름과 맞춰야 폰이 새 화면을 받습니다)
-export const APP_BUILD = 1;
+export const APP_BUILD = 2;
 export const APP_VERSION = '1.0.0';
 
 export const isConfigured = () => !/YOUR-/.test(SUPABASE_URL) && !/YOUR-/.test(SUPABASE_ANON_KEY);
