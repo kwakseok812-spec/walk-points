@@ -1,0 +1,14 @@
+# 걷기 포인트 앱용 Supabase 설정 조각 (새 프로젝트 전용).
+# 호스팅(supabase.com) 프로젝트에서는 아래 두 가지를 대시보드에서 직접 맞춥니다.
+
+[auth]
+# 공개 가입 닫음 - 계정 3개는 admin/seed_users.py 로 미리 만들어 둡니다.
+# 대시보드: Authentication > Sign In / Providers > 「Allow new users to sign up」 끄기
+enable_signup = false
+# 로그인이 일정 시간 뒤 강제로 끊기지 않게: Authentication > Sessions 에서
+#   「Time-box user sessions」과 「Inactivity timeout」은 비워 둡니다(무제한).
+#   「Detect and revoke potentially compromised refresh tokens」는 켜 둡니다.
+
+[functions.pt-auth]
+# 로그인 전에 부르는 함수라 JWT 검사를 끕니다 (함수 안에서 직접 확인).
+verify_jwt = false
