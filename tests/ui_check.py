@@ -214,6 +214,7 @@ with sync_playwright() as p:
     check('되돌리기를 누르면 사용 기록이 사라짐', pg.evaluate("window.__pt.store.state.spends.filter(s => !s.deleted_at && s.memo === '현금 전환').length") == 1)  # 처음부터 있던 1건만
     # 앱 추가
     pg.click('[data-act="add-app"]'); pg.wait_for_selector('[data-act="save-app"]')
+    check('되돌렸다는 안내 줄은 시트를 열면 사라짐(숫자판을 가리지 않음)', pg.locator('.toast.show').count() == 0)
     shot(pg, '27_sheet_addapp_390')
     check('앱 추가: 「앱 화면에 보이는 총 포인트를 그대로 적으세요」 안내', '총 포인트' in text(pg, '.sheet') and '그대로 적으세요' in text(pg, '.sheet'))
     pg.click('.chip-f[data-act="pick-name"] >> nth=0'); keys(pg, '777')
@@ -333,6 +334,9 @@ with sync_playwright() as p:
     pg.click('[data-act="close-sheet"] >> nth=-1'); pg.wait_for_timeout(300)
     check('오프라인: 홈 위에 안내 줄과 카드에 「아직 올라가지 않음」 표시', '인터넷에 연결되어 있지 않습니다' in text(pg, '.banner') and pg.locator('.badge').count() >= 1)
     shot(pg, '61_offline_home_390')
+    fs = pg.evaluate("[...document.querySelectorAll('.badge, .tv-edit, .small, .banner')].map(e => parseFloat(getComputedStyle(e).fontSize))")
+    check('작은 글자도 16px 이상(오프라인 안내 줄은 18px)', fs and min(fs) >= 16 and pg.evaluate("parseFloat(getComputedStyle(document.querySelector('.banner')).fontSize)") >= 18, str(sorted(set(fs))))
+    check('홈의 설정 단추에 「설정」 글자가 함께 있음', '설정' in text(pg, '.set-btn'))
     pg.evaluate("window.__pt_demo.server.online = true; window.__pt.store.sync()"); pg.wait_for_timeout(600)
     check('연결이 돌아오면 자동으로 올라가고 표시가 사라짐', pg.locator('.badge').count() == 0 and pg.locator('.banner').count() == 0)
     # 소급: 그제 날짜로 빠진 기록 채우기 (신한 쏠 야보는 어제 기록만 있음)

@@ -21,25 +21,29 @@ export function validatePassword(pw) {
   return null;
 }
 
-/** 5번 틀릴 때마다 단계가 올라가는 잠금 시간(분): 15분 -> 1시간 -> 하루 */
+/** 잠금 시간(분): 15분 -> 1시간. 1시간이 상한입니다(하루 잠금 없음). */
 export function lockMinutes(level) {
-  if (level <= 1) return 15;
-  if (level === 2) return 60;
-  return 1440;
+  return level <= 1 ? 15 : 60;
 }
+export const MAX_LOCK_LEVEL = 2;
+export const LEVEL_RESET_MS = 24 * 3600 * 1000; // 24시간 동안 틀림이 없으면 단계를 처음(15분)으로
 
 /**
- * 틀린 횟수 계산. state = {failed_count, lock_level}
- * 반환: {failed_count, lock_level, locked_minutes|null, remaining}
+ * 시도를 하기 「전에」 먼저 틀린 횟수를 올립니다(성공하면 pt_auth_ok 가 되돌림).
+ * 이렇게 해야 동시에 여러 번 보내도 5번까지만 비밀번호 확인이 일어납니다.
+ * state = {failed_count, lock_level, last_failed_at(ms)}
+ * 반환: {failed_count, lock_level, locked_minutes|null, remaining, last_failed_at}
  */
-export function registerFail(state) {
-  let failed = (state.failed_count || 0) + 1;
+export function registerFail(state, nowMs = Date.now()) {
+  let failed = state.failed_count || 0;
   let level = state.lock_level || 0;
+  if (state.last_failed_at && nowMs - state.last_failed_at >= LEVEL_RESET_MS) { failed = 0; level = 0; }
+  failed += 1;
   if (failed >= MAX_FAILS) {
-    level += 1;
-    return { failed_count: 0, lock_level: level, locked_minutes: lockMinutes(level), remaining: 0 };
+    level = Math.min(level + 1, MAX_LOCK_LEVEL);
+    return { failed_count: 0, lock_level: level, locked_minutes: lockMinutes(level), remaining: 0, last_failed_at: nowMs };
   }
-  return { failed_count: failed, lock_level: level, locked_minutes: null, remaining: MAX_FAILS - failed };
+  return { failed_count: failed, lock_level: level, locked_minutes: null, remaining: MAX_FAILS - failed, last_failed_at: nowMs };
 }
 
 /**

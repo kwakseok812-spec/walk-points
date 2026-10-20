@@ -27,7 +27,13 @@ function json(status: number, body: unknown) {
 async function svc(path: string, init: RequestInit = {}) {
   return fetch(URL_ + path, {
     ...init,
-    headers: { apikey: SERVICE, Authorization: `Bearer ${SERVICE}`, 'Content-Type': 'application/json', ...(init.headers || {}) },
+    headers: {
+      apikey: SERVICE,
+      // 새 형식 키(sb_secret_)는 JWT가 아니라서 Authorization 머리말에 넣지 않음
+      ...(SERVICE.startsWith('sb_secret_') ? {} : { Authorization: `Bearer ${SERVICE}` }),
+      'Content-Type': 'application/json',
+      ...(init.headers || {}),
+    },
   });
 }
 async function rpc(name: string, args: Record<string, unknown>) {
@@ -64,10 +70,18 @@ async function userFromBearer(req: Request) {
   return await r.json();
 }
 
-/** 틀렸을 때: 횟수를 올리고 남은 횟수 또는 잠금을 알려 줌 */
-async function failResponse(slot: number, wrongMsg: string) {
+/**
+ * 비밀번호를 확인하기 「전에」 먼저 틀린 횟수를 올립니다(pt_auth_fail). 맞으면 pt_auth_ok 로 되돌립니다.
+ * 동시에 여러 요청이 와도 칸당 5번까지만 확인이 일어납니다. 반환: {locked: Response} 또는 {f: 결과}
+ */
+async function countAttempt(slot: number) {
   const rows = await rpc('pt_auth_fail', { p_slot: slot });
   const f = Array.isArray(rows) ? rows[0] : rows;
+  if (!f.allowed) return { locked: json(429, { error: 'locked', message: '잠시 잠겨 있습니다.', until: f.until_at }) };
+  return { f };
+}
+/** 확인에 실패했을 때 응답: 이번 시도로 잠겼으면 잠금, 아니면 남은 횟수 */
+function failResponse(f: any, wrongMsg: string) {
   if (f.just_locked) return json(429, { error: 'locked', message: '잠시 잠겨 있습니다.', until: f.until_at });
   return json(401, { error: 'wrong', message: wrongMsg, remaining: f.remaining });
 }
@@ -121,9 +135,11 @@ Deno.serve(async (req) => {
       if (row.state === 'disabled') return json(403, { error: 'disabled', message: '지금은 사용할 수 없는 사용자입니다.' });
       if (row.state === 'unset') return json(409, { error: 'unset', message: '처음 사용 설정이 필요합니다.' });
       if (isLocked(row)) return json(429, { error: 'locked', message: '잠시 잠겨 있습니다.', until: row.locked_until });
+      const att = await countAttempt(slot);
+      if (att.locked) return att.locked;
       const derived = await derivePassword(slot, String(body.password ?? ''), PEPPER);
       const s = await signIn(slot, derived);
-      if (!s) return await failResponse(slot, '비밀번호가 다릅니다.');
+      if (!s) return failResponse(att.f, '비밀번호가 다릅니다.');
       await rpc('pt_auth_ok', { p_slot: slot });
       return json(200, sessionBody(slot, s));
     }
@@ -138,8 +154,10 @@ Deno.serve(async (req) => {
       if (isLocked(row)) return json(429, { error: 'locked', message: '잠시 잠겨 있습니다.', until: row.locked_until });
       const bad = validatePassword(body.password);
       if (bad) return json(400, { error: 'weak', message: bad });
+      const att = await countAttempt(row.slot);
+      if (att.locked) return att.locked;
       const cur = await signIn(row.slot, await derivePassword(row.slot, String(body.current ?? ''), PEPPER));
-      if (!cur) return await failResponse(row.slot, '지금 비밀번호가 다릅니다.');
+      if (!cur) return failResponse(att.f, '지금 비밀번호가 다릅니다.');
       await rpc('pt_auth_ok', { p_slot: row.slot });
       const derived = await derivePassword(row.slot, body.password, PEPPER);
       if (!(await setPassword(row.user_id, derived))) return json(500, { error: 'server', message: '바꾸지 못했습니다.' });

@@ -27,7 +27,9 @@ def email(slot):
 
 def call(method, url, key, body=None, headers=None):
     data = json.dumps(body).encode('utf-8') if body is not None else None
-    h = {'apikey': key, 'Authorization': f'Bearer {key}', 'Content-Type': 'application/json'}
+    h = {'apikey': key, 'Content-Type': 'application/json'}
+    if not key.startswith('sb_secret_'):   # 새 형식 키(sb_secret_)는 JWT가 아니라 Authorization 머리말에 넣지 않음
+        h['Authorization'] = f'Bearer {key}'
     h.update(headers or {})
     req = urllib.request.Request(url, data=data, method=method, headers=h)
     try:

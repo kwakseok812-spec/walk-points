@@ -254,6 +254,7 @@ test('실수 방지: 10배·10분의 1·음수 차이·변화 없음·미래 날
   assert.equal(chk(1201).nochange, false);
   // 음수 차이인데 지출이 사이에 있으면 음수가 아님 (사용으로 이미 기록한 경우)
   await st.addSpend({ appId: app.id, amount: 300, memo: '현금 전환' });
+  w.advance(60000); // 지출 다음 시각에 기록을 고치는 상황
   const l = live(st, 'logs').find((x) => x.log_date === '2026-10-20');
   const c2 = C.checkLogEntry({ logs: st.state.logs, spends: st.state.spends, appId: app.id, dateStr: '2026-10-20', total: 900, today: '2026-10-20', nowIso: st.nowIso(), existingId: l.id });
   assert.equal(c2.negative, false); // 900 - 1000 + 300 = 200
@@ -440,7 +441,16 @@ test('5번 틀리면 15분 잠금 / 잠금 중엔 맞는 비밀번호도 거절 
   assert.equal(s.slotsState[1].locked_until - w.T, 60 * 60000);
   w.advance(61 * 60000);
   for (let i = 0; i < 5; i++) await s.fnLogin(1, 'x').catch(() => {});
-  assert.equal(s.slotsState[1].locked_until - w.T, 1440 * 60000); // 세 번째부터 하루
+  assert.equal(s.slotsState[1].locked_until - w.T, 60 * 60000); // 세 번째도 1시간(상한, 하루 잠금 없음)
+  // 24시간 넘게 틀림이 없으면 단계를 처음(15분)으로
+  w.advance(25 * 3600000);
+  for (let i = 0; i < 5; i++) await s.fnLogin(1, 'x').catch(() => {});
+  assert.equal(s.slotsState[1].locked_until - w.T, 15 * 60000);
+  // 동시에 10번 보내도 확인은 5번까지만 (먼저 횟수를 올리고 확인)
+  w.advance(2 * 3600000);
+  const rs = await Promise.allSettled(Array.from({ length: 10 }, () => s.fnLogin(1, 'zzz')));
+  assert.equal(rs.filter((r) => r.reason.code === 'wrong').length, 4);
+  assert.equal(rs.filter((r) => r.reason.code === 'locked').length, 6);
 });
 
 test('로그인 유지: 앱을 닫았다 열어도 비밀번호 없이 바로, 며칠 뒤에도', async () => {
@@ -602,4 +612,45 @@ test('분리: 사용자 선택 화면에는 이름·기록이 새지 않는다 (
   const w = world();
   const dump = JSON.stringify(w.server.fnSlots());
   assert.doesNotMatch(dump, /pw|user_id|email|@/);
+});
+
+test('되돌리기 서버 규칙: 5분 안만, 기록이 있는 앱은 거부(연쇄 삭제 없음)', async () => {
+  const w = world();
+  const st = await loggedIn(w);
+  const { app, log } = await st.addApp({ name: 'A', total: 100 });
+  // 기록이 있는 앱은 직접 되돌릴 수 없다
+  assert.throws(() => w.server.undoCreate('pt_apps', st.adapter.session.access_token, app.id), (e) => e.code === 'has_records');
+  assert.equal(w.server.tables.pt_logs.length, 1);
+  // 5분이 지나면 기록 되돌리기도 거부
+  w.advance(6 * 60000);
+  assert.throws(() => w.server.undoCreate('pt_logs', st.adapter.session.access_token, log.id), (e) => e.code === 'too_old');
+  // 이름을 고친 앱(이력 있음)은 거부, 기록 0건이어도
+  const w2 = world();
+  const s2 = await loggedIn(w2);
+  const a2 = (await w2.adapter.data.upsert('pt_apps', [{ id: 'aaaaaaaa-0000-4000-8000-0000000000aa', name: 'B', sort: 1 }]))[0];
+  await w2.adapter.data.upsert('pt_apps', [{ ...a2, name: 'B2' }]);
+  assert.throws(() => w2.server.undoCreate('pt_apps', s2.adapter.session.access_token, a2.id), (e) => e.code === 'has_records');
+  // 기록 0건 + 이력 0건이면 허용
+  const a3 = (await w2.adapter.data.upsert('pt_apps', [{ id: 'aaaaaaaa-0000-4000-8000-0000000000ab', name: 'C', sort: 2 }]))[0];
+  w2.server.undoCreate('pt_apps', s2.adapter.session.access_token, a3.id);
+  assert.equal(w2.server.tables.pt_apps.some((x) => x.id === a3.id), false);
+});
+
+test('같은 시각 충돌: 소급 입력한 기록과 같은 날 지출이 같은 시각이면 기록 -> 지출 순으로 본다 (잔액 1000-100=900)', async () => {
+  const w = world('2026-10-20T09:00:00+09:00');
+  const st = await loggedIn(w);
+  const { app } = await st.addApp({ name: 'A', total: 5 });
+  await st.addSpend({ appId: app.id, amount: 100, memo: '기타', date: '2026-10-18' }); // 18일 마지막 시각
+  await st.saveLog({ appId: app.id, date: '2026-10-18', total: 1000 });              // 18일 마지막 시각 (같은 시각)
+  const now18 = C.endOfDayIso('2026-10-18');
+  assert.equal(st.state.logs.find((l) => l.log_date === '2026-10-18').recorded_at, now18);
+  assert.equal(st.state.spends[0].spent_at, now18);
+  // 오늘 기록(5)이 최신이므로 18일 잔액은 따로 계산해 본다
+  const logs = st.state.logs.filter((l) => l.log_date <= '2026-10-18');
+  assert.equal(C.balanceOf(logs, st.state.spends, app.id), 900);
+  // 다음 기록의 차이: 1000 -> 1300 이면 지출 100 이 사이에 있어 차이는 400
+  const l20 = st.state.logs.find((l) => l.log_date === '2026-10-20');
+  await st.editLog(l20.id, { total: 1300 });
+  const row = st.state.logs.find((l) => l.log_date === '2026-10-20');
+  assert.equal(C.logDiff(st.state.logs, st.state.spends, row).diff, 400);
 });

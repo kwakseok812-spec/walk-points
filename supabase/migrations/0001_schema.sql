@@ -10,6 +10,7 @@ create table if not exists public.pt_auth_state (
   failed_count int  not null default 0,
   lock_level   int  not null default 0,
   locked_until timestamptz,
+  last_failed_at timestamptz,                     -- 24시간 틀림이 없으면 잠금 단계를 처음으로
   updated_at   timestamptz not null default now()
 );
 

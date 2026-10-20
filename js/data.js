@@ -18,7 +18,7 @@
 //   serverOffsetMs()             -> 서버 시계 - 폰 시계
 
 import {
-  validatePassword, derivePassword, registerFail, lockMinutes, SLOT_LABEL,
+  validatePassword, derivePassword, registerFail, SLOT_LABEL,
 } from '../supabase/functions/pt-auth/logic.js';
 import { kstDate, TRASH_DAYS } from './calc.js';
 
@@ -100,32 +100,36 @@ export class MemoryServer {
     if (st.locked_until && st.locked_until > this.now()) {
       throw new ApiError(429, 'locked', '잠시 잠겨 있습니다.', { until: this.iso(st.locked_until) });
     }
+    // 확인하기 전에 먼저 횟수를 올립니다(동시에 여러 번 보내도 5번까지만 확인)
+    const r = this._countFail(st);
     const h = await derivePassword(slot, pw || '', this.pepper);
     if (h !== st.pwhash) {
-      const r = registerFail(st);
-      st.failed_count = r.failed_count;
-      st.lock_level = r.lock_level;
-      if (r.locked_minutes) {
-        st.locked_until = this.now() + r.locked_minutes * 60000;
-        throw new ApiError(429, 'locked', '잠시 잠겨 있습니다.', { until: this.iso(st.locked_until) });
-      }
+      if (r.locked_minutes) throw new ApiError(429, 'locked', '잠시 잠겨 있습니다.', { until: this.iso(st.locked_until) });
       throw new ApiError(401, 'wrong', '비밀번호가 다릅니다.', { remaining: r.remaining });
     }
-    st.failed_count = 0; st.lock_level = 0; st.locked_until = null;
+    this._countOk(st);
     return this._session(slot);
   }
+  _countFail(st) {
+    const r = registerFail(st, this.now());
+    st.failed_count = r.failed_count; st.lock_level = r.lock_level; st.last_failed_at = r.last_failed_at;
+    if (r.locked_minutes) st.locked_until = this.now() + r.locked_minutes * 60000;
+    return r;
+  }
+  _countOk(st) { st.failed_count = 0; st.lock_level = 0; st.locked_until = null; st.last_failed_at = null; }
   async fnChange(access, cur, next) {
     const a = this._auth(access);
     const bad = validatePassword(next);
     if (bad) throw new ApiError(400, 'weak', bad);
     const st = this.slotsState[a.slot];
+    if (st.locked_until && st.locked_until > this.now()) throw new ApiError(429, 'locked', '잠시 잠겨 있습니다.', { until: this.iso(st.locked_until) });
+    const r = this._countFail(st);
     const h = await derivePassword(a.slot, cur || '', this.pepper);
     if (h !== st.pwhash) {
-      const r = registerFail(st);
-      st.failed_count = r.failed_count; st.lock_level = r.lock_level;
-      if (r.locked_minutes) st.locked_until = this.now() + r.locked_minutes * 60000;
+      if (r.locked_minutes) throw new ApiError(429, 'locked', '잠시 잠겨 있습니다.', { until: this.iso(st.locked_until) });
       throw new ApiError(401, 'wrong', '현재 비밀번호가 다릅니다.', { remaining: r.remaining });
     }
+    this._countOk(st);
     st.pwhash = await derivePassword(a.slot, next, this.pepper);
     this._revokeUser(a.user_id);
     return this._session(a.slot);
@@ -249,10 +253,12 @@ export class MemoryServer {
     if (i < 0) return;
     const r = tbl[i];
     if (r.user_id !== a.user_id) throw new ApiError(403, 'rls', '권한이 없습니다.');
-    if (this.now() - Date.parse(r.created_at) > 60 * 60000) throw new ApiError(403, 'too_old', '너무 오래되어 취소할 수 없습니다.');
+    if (this.now() - Date.parse(r.created_at) > 5 * 60000) throw new ApiError(403, 'too_old', '너무 오래되어 취소할 수 없습니다.');
     if (table === 'pt_apps') {
-      this.tables.pt_logs = this.tables.pt_logs.filter((l) => l.app_id !== id);
-      this.tables.pt_spends = this.tables.pt_spends.filter((l) => l.app_id !== id);
+      // 기록·지출·고친 이력이 하나라도 있으면 거부(연쇄 영구 삭제 없음)
+      const has = this.tables.pt_logs.some((l) => l.app_id === id) || this.tables.pt_spends.some((l) => l.app_id === id)
+        || this.tables.pt_history.some((h) => h.entity === 'app' && h.entity_id === id && h.action === 'update');
+      if (has) throw new ApiError(403, 'has_records', '기록이 있는 앱은 되돌릴 수 없습니다.');
     }
     tbl.splice(i, 1);
     this.tables.pt_history = this.tables.pt_history.filter((h) => h.entity_id !== id);
@@ -277,6 +283,7 @@ export class MemoryServer {
 export function createMemoryAdapter(server, { phoneClockSkewMs = 0 } = {}) {
   let session = null;
   const ad = {
+    onSession: null,
     mode: 'memory',
     server,
     get session() { return session; },
@@ -305,7 +312,7 @@ export function createMemoryAdapter(server, { phoneClockSkewMs = 0 } = {}) {
   let refreshing = null;
   const renew = () => {
     if (!refreshing) {
-      refreshing = Promise.resolve().then(() => { session = server.refreshSession(session.refresh_token); })
+      refreshing = Promise.resolve().then(() => { session = server.refreshSession(session.refresh_token); if (ad.onSession) ad.onSession(session); })
         .finally(() => { refreshing = null; });
     }
     return refreshing;
@@ -393,6 +400,7 @@ export function createSupabaseAdapter({ url, anonKey }) {
   }
 
   const ad = {
+    onSession: null,
     mode: 'supabase',
     get session() { return session; },
     setSession(s) { session = s; },
@@ -409,6 +417,7 @@ export function createSupabaseAdapter({ url, anonKey }) {
           throw e;
         }
         session = { slot: session?.slot, user_id: d.user?.id, access_token: d.access_token, refresh_token: d.refresh_token };
+        if (ad.onSession) ad.onSession(session); // 갱신된 새 토큰을 바로 저장하게 알림
         return session;
       },
       changePassword: async (cur, next) => (session = toSession(await fn({ action: 'change', current: cur, password: next }, session.access_token), session.slot)),

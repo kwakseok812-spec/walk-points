@@ -43,6 +43,7 @@ export function createStore({ adapter, storage, clock = () => Date.now() }) {
     del(k) { try { store0.removeItem(k); } catch { /* ignore */ } },
   };
 
+  adapter.onSession = () => persistSession();
   const state = {
     phase: 'boot', // boot | login | app
     slots: [],
@@ -310,7 +311,7 @@ export function createStore({ adapter, storage, clock = () => Date.now() }) {
     await commit('앱 추가', [
       { type: 'upsert', table: 'pt_apps', rows: [app], created: true },
       { type: 'upsert', table: 'pt_logs', rows: [log], created: true },
-    ], [{ type: 'undoCreate', table: 'pt_apps', id: app.id }]);
+    ], [{ type: 'undoCreate', table: 'pt_logs', id: log.id }, { type: 'undoCreate', table: 'pt_apps', id: app.id }]);
     return { app, log };
   }
 

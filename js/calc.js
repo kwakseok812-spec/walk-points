@@ -85,12 +85,12 @@ export function prevLogBefore(logs, appId, dateStr, exceptId = null) {
   return arr.length ? arr[arr.length - 1] : null;
 }
 
-/** 두 시각 사이(앞 제외, 뒤 포함)의 지출 합 */
+/** 두 시각 사이(앞 포함, 뒤 제외)의 지출 합. 같은 시각이면 기록이 먼저, 지출이 나중으로 봅니다 */
 export function spendBetween(spends, appId, fromIso, toIso) {
   const a = fromIso ? t(fromIso) : -Infinity;
   const b = toIso ? t(toIso) : Infinity;
   return liveSpends(spends, appId)
-    .filter((s) => t(s.spent_at) > a && t(s.spent_at) <= b)
+    .filter((s) => t(s.spent_at) >= a && t(s.spent_at) < b)
     .reduce((x, s) => x + s.amount, 0);
 }
 
@@ -107,7 +107,7 @@ export function balanceOf(logs, spends, appId) {
   const arr = liveLogs(logs, appId);
   if (!arr.length) return null;
   const last = arr[arr.length - 1];
-  const after = liveSpends(spends, appId).filter((s) => t(s.spent_at) > t(last.recorded_at));
+  const after = liveSpends(spends, appId).filter((s) => t(s.spent_at) >= t(last.recorded_at));
   return last.total - after.reduce((x, s) => x + s.amount, 0);
 }
 
@@ -190,7 +190,7 @@ export function checkSpend({ logs, spends, appId, amount, spentIso, excludeId = 
   const upto = arr.filter((l) => t(l.recorded_at) <= t(spentIso));
   const base = upto.length ? upto[upto.length - 1] : null;
   if (base) {
-    const used = liveSpends(sp, appId).filter((s) => t(s.spent_at) > t(base.recorded_at) && t(s.spent_at) <= t(spentIso));
+    const used = liveSpends(sp, appId).filter((s) => t(s.spent_at) >= t(base.recorded_at) && t(s.spent_at) < t(spentIso));
     out.balance = base.total - used.reduce((x, s) => x + s.amount, 0);
     out.overBalance = amount > out.balance;
   }

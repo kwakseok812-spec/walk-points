@@ -98,7 +98,7 @@ export function createUI({ root, store, haptics = true, onReload }) {
     }
     const first = L.step === 'setup';
     const t = first
-      ? `<p class="lead">처음이시군요.<br>사용할 비밀번호를 정해 주세요.</p><p class="muted">숫자 6자리를 권장합니다. 글자도 쓸 수 있습니다.</p>`
+      ? `<p class="lead">처음이시군요.<br>사용할 비밀번호를 정해 주세요.</p><p class="muted">4자 이상이면 되지만 6자 이상을 권장합니다. 숫자 6자리도 좋습니다.</p>`
       : `<p class="lead">비밀번호를 입력해 주세요.</p>`;
     const type = L.show ? 'text' : 'password';
     return `<main class="login"><button class="back press" data-act="login-back" aria-label="뒤로">${ICON.back}<span>다른 사용자</span></button>
@@ -147,7 +147,7 @@ export function createUI({ root, store, haptics = true, onReload }) {
     const empty = `<div class="empty"><div class="empty-foot">${ICON.foot}</div><p class="lead">아직 등록한 걷기 앱이 없습니다.</p><p class="muted">아래 「앱 추가」를 눌러 처음 한 번만 등록해 주세요.</p></div>`;
     return `<main class="home">
       <header class="top"><div><div class="date">${mdw(t)}</div><div class="who">${slotLabel(S.slot)}</div></div>
-        <button class="icon-btn press" data-act="go-settings" aria-label="설정">${ICON.gear}</button></header>
+        <button class="set-btn press" data-act="go-settings" aria-label="설정">${ICON.gear}<span>설정</span></button></header>
       <section class="sum"><span class="sum-lbl">전체 잔액</span><span class="sum-num">${num(total)}</span></section>
       ${banners()}
       <section class="cards">${sums.length ? cards : empty}</section>
@@ -372,7 +372,7 @@ export function createUI({ root, store, haptics = true, onReload }) {
   }
 
   function pwSheet(sh) {
-    return `<label class="field"><span class="lbl">지금 비밀번호</span><input class="input" data-keep="pwcur" data-restore="0" type="password" autocomplete="off"></label>
+    return `<p class="hint">새 비밀번호는 4자 이상이면 되지만 6자 이상을 권장합니다.</p><label class="field"><span class="lbl">지금 비밀번호</span><input class="input" data-keep="pwcur" data-restore="0" type="password" autocomplete="off"></label>
       <label class="field"><span class="lbl">새 비밀번호</span><input class="input" data-keep="pwnew" data-restore="0" type="password" autocomplete="off"></label>
       <label class="field"><span class="lbl">새 비밀번호 한 번 더</span><input class="input" data-keep="pwnew2" data-restore="0" type="password" autocomplete="off"></label>
       ${errLine(sh)}<button class="big-btn primary press" data-act="save-pw" ${ui.busy ? 'disabled' : ''}>바꾸기</button>`;
@@ -398,6 +398,7 @@ export function createUI({ root, store, haptics = true, onReload }) {
 
   /* ============================== 시트 열고 닫기 ============================== */
   function openSheet(sh) {
+    ui.notice = '';
     ui.sheet = { error: '', ...sh };
     try { history.pushState({ s: 1 }, ''); ui._pushed = (ui._pushed || 0) + 1; } catch { /* 무시 */ }
     rerender();

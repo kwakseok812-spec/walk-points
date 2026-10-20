@@ -23,7 +23,8 @@ for (const s of [1, 2, 3]) {
   db.users[uid] = { id: uid, email: slotEmail(s), password: 'random-' + s };
 }
 const jres = (status, body) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
-const mins = (l) => (l <= 1 ? 15 : l === 2 ? 60 : 1440);
+const mins = (l) => (l <= 1 ? 15 : 60);
+let tokenCalls = 0;
 
 globalThis.fetch = async (input, init = {}) => {
   const url = new URL(typeof input === 'string' ? input : input.url);
@@ -43,12 +44,15 @@ globalThis.fetch = async (input, init = {}) => {
       return jres(200, null);
     }
     if (fn === 'pt_auth_unclaim') { db.slots[body.p_slot].state = 'unset'; return jres(200, null); }
-    if (fn === 'pt_auth_ok') { Object.assign(db.slots[body.p_slot], { failed_count: 0, lock_level: 0, locked_until: null }); return jres(200, null); }
+    if (fn === 'pt_auth_ok') { Object.assign(db.slots[body.p_slot], { failed_count: 0, lock_level: 0, locked_until: null, last_failed_at: null }); return jres(200, null); }
     if (fn === 'pt_auth_fail') {
-      const s = db.slots[body.p_slot]; s.failed_count++;
+      const s = db.slots[body.p_slot];
+      if (s.locked_until && s.locked_until > nowMs) return jres(200, [{ allowed: false, just_locked: false, remaining: 0, until_at: new Date(s.locked_until).toISOString() }]);
+      if (s.last_failed_at && nowMs - s.last_failed_at >= 24 * 3600 * 1000) { s.failed_count = 0; s.lock_level = 0; }
+      s.failed_count++; s.last_failed_at = nowMs;
       let just = false;
-      if (s.failed_count >= 5) { s.lock_level++; s.locked_until = nowMs + mins(s.lock_level) * 60000; s.failed_count = 0; just = true; }
-      return jres(200, [{ just_locked: just, remaining: just ? 0 : 5 - s.failed_count, until_at: s.locked_until ? new Date(s.locked_until).toISOString() : null }]);
+      if (s.failed_count >= 5) { s.lock_level = Math.min(s.lock_level + 1, 2); s.locked_until = nowMs + mins(s.lock_level) * 60000; s.failed_count = 0; just = true; }
+      return jres(200, [{ allowed: true, just_locked: just, remaining: just ? 0 : 5 - s.failed_count, until_at: s.locked_until ? new Date(s.locked_until).toISOString() : null }]);
     }
     if (fn === 'pt_revoke_sessions') { db.sessionsRevoked.push(body.p_user); for (const [k, v] of db.tokens) if (v.id === body.p_user) db.tokens.delete(k); return jres(200, null); }
     return jres(404, { message: 'no fn' });
@@ -58,6 +62,8 @@ globalThis.fetch = async (input, init = {}) => {
     db.users[path.split('/').pop()].password = body.password; return jres(200, {});
   }
   if (path === '/auth/v1/token') {
+    tokenCalls++;
+    await new Promise((r) => setTimeout(r, 5)); // 확인에 시간이 걸리는 상황(동시 요청이 겹치도록)
     const u = Object.values(db.users).find((x) => x.email === body.email);
     if (!u || u.password !== body.password) return jres(400, { error: 'invalid_grant', error_description: 'Invalid login credentials' });
     const tok = 'tok_' + Math.random().toString(36).slice(2);
@@ -141,5 +147,30 @@ test('나쁜 요청: 없는 칸·없는 동작·서버 비밀값 미설정', asy
   assert.equal((await call({ action: 'zzz' })).status, 400);
   const o = await handler(new Request(URL_, { method: 'OPTIONS' }));
   assert.equal(o.status, 204);
-  Date.now = realNow;
+});
+
+test('잠금 우회 방지: 틀린 비밀번호 10건을 동시에 보내도 확인은 5번까지만 일어남', async () => {
+  nowMs += 3 * 24 * 3600000; // 앞선 시험의 잠금·횟수와 분리
+  await call({ action: 'login', slot: 1, password: 'first-pw1' }); // 성공으로 횟수 초기화
+  const before = tokenCalls;
+  const rs = await Promise.all(Array.from({ length: 10 }, () => call({ action: 'login', slot: 1, password: 'guess-' + Math.random() })));
+  assert.equal(tokenCalls - before, 5);
+  assert.equal(rs.filter((r) => r.status === 429).length >= 5, true);
+  // 동시에 맞는 비밀번호와 틀린 것이 섞여도 잠긴 뒤에는 맞는 것도 거절
+  const m = await call({ action: 'login', slot: 1, password: 'first-pw1' });
+  assert.equal(m.status, 429);
+});
+
+test('잠금 단계: 15분 -> 1시간이 상한, 24시간 틀림이 없으면 처음(15분)으로, 다른 칸은 영향 없음', async () => {
+  const lockOnce = async () => { for (let i = 0; i < 5; i++) await call({ action: 'login', slot: 2, password: 'bad-' + i }); return db.slots[2].locked_until - nowMs; };
+  nowMs += 3 * 24 * 3600000;
+  assert.equal(await lockOnce(), 15 * 60000);
+  nowMs += 16 * 60000;
+  assert.equal(await lockOnce(), 60 * 60000);
+  nowMs += 61 * 60000;
+  assert.equal(await lockOnce(), 60 * 60000); // 상한 1시간 (하루 잠금 없음)
+  nowMs += 25 * 3600000; // 24시간 넘게 틀림 없음
+  assert.equal(await lockOnce(), 15 * 60000);
+  const sl = await call({ action: 'slots' });
+  assert.equal(sl.body.slots[0].locked_until, null);
 });

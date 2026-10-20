@@ -10,7 +10,8 @@ const root = document.getElementById('app');
 async function start() {
   let adapter;
   let demo = null;
-  if (params.get('mock') === '1') {
+  const LOCAL = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
+  if (params.get('mock') === '1' && LOCAL) { // 시험 화면은 이 PC(로컬)에서만 열림. 배포 주소에서는 무시
     const { makeDemo, DEMO_PASSWORD } = await import('./demo.js');
     demo = await makeDemo({ populate: params.get('empty') !== '1' });
     adapter = demo.adapter;
