@@ -10,11 +10,11 @@ declare
   slot_no int := 2;      -- ← 초기화할 칸
   uid uuid;
 begin
-  select user_id into uid from public.pt_auth_state where slot = slot_no;
-  if uid is null then raise exception 'slot % not found', slot_no; end if;
+  if not exists (select 1 from public.pt_auth_state where slot = slot_no) then raise exception 'slot % not found', slot_no; end if;
+  select user_id into uid from public.pt_auth_state where slot = slot_no;   -- 아직 한 번도 설정하지 않은 칸은 null
   update public.pt_auth_state
      set state = 'disabled', failed_count = 0, lock_level = 0, locked_until = null, updated_at = now()
    where slot = slot_no;
-  perform public.pt_revoke_sessions(uid);
+  if uid is not null then perform public.pt_revoke_sessions(uid); end if;
   raise notice '사용자% 초기화 완료 (임시 잠금). 본인이 준비되면 open_slot.sql 로 여세요.', slot_no;
 end $$;

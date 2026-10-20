@@ -107,16 +107,27 @@ language sql security definer set search_path = public as $$
   update pt_auth_state set failed_count = 0, lock_level = 0, locked_until = null, last_failed_at = null, updated_at = now() where slot = p_slot;
 $$;
 
--- 첫 설정: 미설정 칸에 한해 한 번만 (먼저 도착한 것만 인정). 성공하면 user_id 를 돌려주고, 아니면 null
-create or replace function public.pt_auth_claim(p_slot int) returns uuid
+-- 첫 설정: 미설정 칸에 한해 한 번만 (먼저 도착한 것만 인정). claimed=true 이면 이 요청이 칸을 차지한 것.
+-- user_id 는 그 칸의 로그인 계정(아직 만들지 않았으면 null → 로그인 함수가 만들고 pt_auth_set_user 로 기록)
+create or replace function public.pt_auth_claim(p_slot int)
+returns table (claimed boolean, user_id uuid)
 language plpgsql security definer set search_path = public as $$
-declare u uuid;
+declare u uuid; n int;
 begin
   update pt_auth_state set state = 'set', updated_at = now()
    where slot = p_slot and state = 'unset'
-   returning user_id into u;
-  return u;
+   returning pt_auth_state.user_id into u;
+  get diagnostics n = row_count;
+  claimed := n > 0;
+  user_id := u;
+  return next;
 end $$;
+
+-- 로그인 계정을 처음 만들었을 때 그 칸에 기록
+create or replace function public.pt_auth_set_user(p_slot int, p_user uuid) returns void
+language sql security definer set search_path = public as $$
+  update pt_auth_state set user_id = p_user, updated_at = now() where slot = p_slot and user_id is null;
+$$;
 
 create or replace function public.pt_auth_unclaim(p_slot int) returns void
 language sql security definer set search_path = public as $$
@@ -140,6 +151,7 @@ revoke all on function public.pt_auth_fail(int) from public, anon, authenticated
 revoke all on function public.pt_auth_ok(int) from public, anon, authenticated;
 revoke all on function public.pt_auth_claim(int) from public, anon, authenticated;
 revoke all on function public.pt_auth_unclaim(int) from public, anon, authenticated;
+revoke all on function public.pt_auth_set_user(int, uuid) from public, anon, authenticated;
 revoke all on function public.pt_revoke_sessions(uuid) from public, anon, authenticated;
 grant execute on function public.pt_lock_minutes(int), public.pt_auth_fail(int), public.pt_auth_ok(int),
-  public.pt_auth_claim(int), public.pt_auth_unclaim(int), public.pt_revoke_sessions(uuid) to service_role;
+  public.pt_auth_claim(int), public.pt_auth_set_user(int, uuid), public.pt_auth_unclaim(int), public.pt_revoke_sessions(uuid) to service_role;

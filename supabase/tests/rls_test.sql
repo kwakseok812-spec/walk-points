@@ -1,4 +1,4 @@
--- 사용자 분리 서버 시험 (DESIGN 8절 1~7번). 새 프로젝트에 0001~0004 를 적용하고 seed_users.py 를 실행한 뒤
+-- 사용자 분리 서버 시험 (DESIGN 8절 1~7번). 새 프로젝트에 0001~0005 를 적용한 뒤
 -- SQL Editor 에서 통째로 실행합니다. 끝에서 항상 ROLLBACK 하므로 아무것도 남지 않습니다(실제 기록 변경 0).
 -- 실패하면 「FAIL: ...」 오류로 멈춥니다. 끝까지 오면 「PASS」 알림이 나옵니다.
 -- (이 파일은 작성만 했고 아직 실제 서버에서 실행하지 않았습니다)
@@ -13,10 +13,12 @@ declare
   n int;
   ok boolean;
 begin
-  select user_id into u1 from public.pt_auth_state where slot = 1;
-  select user_id into u2 from public.pt_auth_state where slot = 2;
-  select user_id into u3 from public.pt_auth_state where slot = 3;
-  if u1 is null or u2 is null or u3 is null then raise exception 'FAIL: seed_users.py 를 먼저 실행하세요'; end if;
+  -- 로그인 계정은 첫 설정 때 만들어지므로, 이 시험은 롤백될 시험용 계정 3개를 직접 만들어 쓴다
+  u1 := gen_random_uuid(); u2 := gen_random_uuid(); u3 := gen_random_uuid();
+  insert into auth.users (id, aud, role, email) values
+    (u1, 'authenticated', 'authenticated', 'rls-test-1@pt.example.com'),
+    (u2, 'authenticated', 'authenticated', 'rls-test-2@pt.example.com'),
+    (u3, 'authenticated', 'authenticated', 'rls-test-3@pt.example.com');
 
   -- 각 사용자로 자기 앱·기록·사용을 만든다
   perform set_config('request.jwt.claims', json_build_object('sub', u1, 'role', 'authenticated')::text, true);
@@ -92,6 +94,21 @@ begin
   if not ok then raise exception 'FAIL: 로그인한 사용자가 잠금 함수를 부름'; end if;
   reset role;
 
+  -- 비밀값 표(pt_secret)는 앱 권한으로 읽을 수 없음
+  perform set_config('request.jwt.claims', json_build_object('sub', u1, 'role', 'authenticated')::text, true);
+  set local role authenticated;
+  ok := false;
+  begin perform 1 from public.pt_secret limit 1; exception when others then ok := true; end;
+  if not ok then raise exception 'FAIL: 로그인한 사용자가 pt_secret 을 읽음'; end if;
+  reset role;
+  set local role anon;
+  ok := false;
+  begin perform 1 from public.pt_secret limit 1; exception when others then ok := true; end;
+  if not ok then raise exception 'FAIL: anon 이 pt_secret 을 읽음'; end if;
+  reset role;
+  if not exists (select 1 from public.pt_secret where name = 'pepper' and length(value) >= 32) then raise exception 'FAIL: 0005 의 비밀값(pepper)이 없음'; end if;
+  if (select count(*) from public.pt_auth_state) <> 3 then raise exception 'FAIL: 사용자 칸 3개가 없음 (0005 확인)'; end if;
+
   raise notice 'PASS: 사용자 분리 시험 통과 (곧 ROLLBACK 합니다)';
 end $$;
 
@@ -102,12 +119,18 @@ end $$;
 do $$
 declare
   u1 uuid; u2 uuid; u3 uuid;
-  r record; n int; c1 uuid; c2 uuid; i int;
+  r record; n int; ok1 boolean; ok2 boolean; i int;
   sess_before int; sess_after int; apps_before int;
 begin
-  select user_id into u1 from public.pt_auth_state where slot = 1;
-  select user_id into u2 from public.pt_auth_state where slot = 2;
-  select user_id into u3 from public.pt_auth_state where slot = 3;
+  -- 시험용 계정 3개(롤백됨)와 칸 연결
+  u1 := gen_random_uuid(); u2 := gen_random_uuid(); u3 := gen_random_uuid();
+  insert into auth.users (id, aud, role, email) values
+    (u1, 'authenticated', 'authenticated', 'rls-test-1@pt.example.com'),
+    (u2, 'authenticated', 'authenticated', 'rls-test-2@pt.example.com'),
+    (u3, 'authenticated', 'authenticated', 'rls-test-3@pt.example.com');
+  update public.pt_auth_state set user_id = u1 where slot = 1;
+  update public.pt_auth_state set user_id = u2 where slot = 2;
+  update public.pt_auth_state set user_id = u3 where slot = 3;
 
   -- 시험 준비: 1 = 미설정, 2 = 설정됨(기록 있음), 3 = 사용 안 함
   update public.pt_auth_state set state = 'unset', failed_count = 0, lock_level = 0, locked_until = null, last_failed_at = null where slot = 1;
@@ -115,14 +138,16 @@ begin
   update public.pt_auth_state set state = 'disabled', failed_count = 0, lock_level = 0, locked_until = null, last_failed_at = null where slot = 3;
 
   -- 8) 첫 설정: 미설정 칸은 첫 번째만 성공(user_id 반환), 두 번째·이미 설정된 칸은 null
-  c1 := public.pt_auth_claim(1);
-  c2 := public.pt_auth_claim(1);
-  if c1 is distinct from u1 then raise exception 'FAIL(8): 첫 설정이 받아들여지지 않음'; end if;
-  if c2 is not null then raise exception 'FAIL(8): 같은 칸 두 번째 설정이 통과됨'; end if;
-  if public.pt_auth_claim(2) is not null then raise exception 'FAIL(8): 이미 설정된 칸에 설정이 통과됨'; end if;
+  select claimed into ok1 from public.pt_auth_claim(1);
+  select claimed into ok2 from public.pt_auth_claim(1);
+  if not ok1 then raise exception 'FAIL(8): 첫 설정이 받아들여지지 않음'; end if;
+  if ok2 then raise exception 'FAIL(8): 같은 칸 두 번째 설정이 통과됨'; end if;
+  select claimed into ok1 from public.pt_auth_claim(2);
+  if ok1 then raise exception 'FAIL(8): 이미 설정된 칸에 설정이 통과됨'; end if;
 
   -- 11) 사용자3 「사용 안 함」: 첫 설정 거부
-  if public.pt_auth_claim(3) is not null then raise exception 'FAIL(11): 사용 안 함 칸에 첫 설정이 통과됨'; end if;
+  select claimed into ok1 from public.pt_auth_claim(3);
+  if ok1 then raise exception 'FAIL(11): 사용 안 함 칸에 첫 설정이 통과됨'; end if;
   if (select state from public.pt_auth_state where slot = 3) <> 'disabled' then raise exception 'FAIL(11): 사용자3 상태가 바뀜'; end if;
 
   -- 10) 잠금: 사용자2 를 5번 틀려 잠가도 사용자1 은 영향 없음, 잠긴 동안 시도는 allowed=false
