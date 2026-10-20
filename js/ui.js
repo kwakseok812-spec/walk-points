@@ -60,8 +60,10 @@ export function createUI({ root, store, haptics = true, onReload }) {
     const vals = {};
     root.querySelectorAll('[data-keep]').forEach((i) => { vals[i.dataset.keep] = i.value; });
 
+    const sb = root.querySelector('.sheet-body'); const sbTop = sb ? sb.scrollTop : 0; const winY = window.scrollY;
     const html = S.phase === 'login' ? loginHtml() : S.phase === 'app' ? appHtml() : '<div class="boot">불러오는 중입니다…</div>';
     root.innerHTML = html + sheetHtml() + dialogHtml();
+    { const nb = root.querySelector('.sheet-body'); if (nb && sbTop) nb.scrollTop = sbTop; if (winY && Math.abs(window.scrollY - winY) > 1) window.scrollTo(0, winY); }
     document.documentElement.dataset.font = S.settings.font;
     document.documentElement.dataset.reduce = S.settings.reduceMotion ? '1' : '0';
 
@@ -160,7 +162,8 @@ export function createUI({ root, store, haptics = true, onReload }) {
     if (!u || ui.sheet) return '';
     const left = Math.max(0, Math.ceil((u.expires - store.now()) / 1000));
     if (left <= 0) return '';
-    return `<div class="undo-bar" role="status"><span>${u.status === 'queued' ? '임시로 저장했습니다 (아직 올라가지 않음)' : `방금 ${esc(u.label)}`}</span><button class="undo-btn press" data-act="undo">되돌리기 <span class="count">${left}</span></button></div>`;
+    const enter = !u._in; u._in = true; // 나타나는 움직임은 처음 한 번만 (다시 그려도 깜빡이지 않게)
+    return `<div class="undo-bar${enter ? ' enter' : ''}" role="status"><span>${u.status === 'queued' ? '임시로 저장했습니다 (아직 올라가지 않음)' : `방금 ${esc(u.label)}`}</span><button class="undo-btn press" data-act="undo">되돌리기 <span class="count">${left}</span></button></div>`;
   }
 
   /* ---------------------------- 기록 보기 ---------------------------- */
@@ -236,9 +239,7 @@ export function createUI({ root, store, haptics = true, onReload }) {
     return `<div class="tabs" role="tablist">${t('log', '기록')}${t('spend', '사용')}<button class="tab press" data-act="tab" data-v="history">이 앱 기록</button></div>`;
   }
 
-  function sheetHtml() {
-    const sh = ui.sheet;
-    if (!sh) return '';
+  function sheetInner(sh) {
     let inner = '';
     let title = '';
     if (sh.kind === 'log') { title = appName(sh.appId); inner = logSheet(sh); }
@@ -250,9 +251,17 @@ export function createUI({ root, store, haptics = true, onReload }) {
     else if (sh.kind === 'saved') { title = ''; inner = savedSheet(sh); }
     else if (sh.kind === 'font') { title = '글씨 크기'; inner = fontSheet(); }
     else if (sh.kind === 'pwchange') { title = '비밀번호 바꾸기'; inner = pwSheet(sh); }
+    return { title, inner };
+  }
+
+  function sheetHtml() {
+    const sh = ui.sheet;
+    if (!sh) return '';
+    const { title, inner } = sheetInner(sh);
     const showClose = sh.kind !== 'font';
-    return `<div class="scrim ${sh.closing ? 'out' : ''}" data-act="${sh.kind === 'font' ? 'noop' : 'close-sheet'}"></div>
-      <div class="sheet ${sh.closing ? 'out' : ''}" role="dialog" aria-modal="true" aria-label="${esc(title)}">
+    const enter = !sh._in && !sh.closing; sh._in = true; // 올라오는 움직임은 시트가 처음 열릴 때만
+    return `<div class="scrim ${sh.closing ? 'out' : enter ? 'enter' : ''}" data-act="${sh.kind === 'font' ? 'noop' : 'close-sheet'}"></div>
+      <div class="sheet ${sh.closing ? 'out' : enter ? 'enter' : ''}" role="dialog" aria-modal="true" aria-label="${esc(title)}">
         <div class="sheet-head"><h2>${esc(title)}</h2>${showClose ? `<button class="icon-btn press" data-act="close-sheet" aria-label="닫기">${ICON.close}</button>` : ''}</div>
         <div class="sheet-body">${inner}</div></div>`;
   }
@@ -356,9 +365,10 @@ export function createUI({ root, store, haptics = true, onReload }) {
     const queued = sh.status === 'queued';
     const next = sh.kind2 === 'log' ? store.nextApp(sh.appId) : null;
     const allDone = sh.kind2 === 'log' && !next && store.activeApps().length > 0;
+    const play = !sh._play ? ' play' : ''; sh._play = true; // 체크 그리기는 처음 한 번만
     const head = queued
-      ? `<div class="saved-head queued"><div class="ic-wrap">${ICON.check}</div><h2>임시로 저장했습니다</h2><p class="muted">인터넷이 연결되면 자동으로 올라갑니다.<br>아직 올라가지 않았습니다.</p></div>`
-      : `<div class="saved-head"><div class="ic-wrap">${ICON.check}</div><h2>${esc(sh.headline)}</h2></div>`;
+      ? `<div class="saved-head queued"><div class="ic-wrap${play}">${ICON.check}</div><h2>임시로 저장했습니다</h2><p class="muted">인터넷이 연결되면 자동으로 올라갑니다.<br>아직 올라가지 않았습니다.</p></div>`
+      : `<div class="saved-head"><div class="ic-wrap${play}">${ICON.check}</div><h2>${esc(sh.headline)}</h2></div>`;
     const undoBtn = u && left > 0 ? `<button class="big-btn press" data-act="undo-sheet">되돌리기 <span class="count">${left}</span></button>` : '';
     return `${head}<div class="saved-body">${sh.lines.map((l) => `<p>${l}</p>`).join('')}</div>
       <div class="saved-actions">${next ? `<button class="big-btn primary press" data-act="next-app" data-id="${next.id}">다음 앱 · ${esc(next.name)}</button>` : ''}
@@ -382,7 +392,8 @@ export function createUI({ root, store, haptics = true, onReload }) {
   function dialogHtml() {
     const d = ui.dialog;
     if (!d) return '';
-    return `<div class="scrim dlg-scrim"></div><div class="dialog" role="alertdialog" aria-modal="true"><h2>${esc(d.title)}</h2>${d.body.map((l) => `<p>${l}</p>`).join('')}
+    const enter = !d._in; d._in = true;
+    return `<div class="scrim dlg-scrim"></div><div class="dialog${enter ? ' enter' : ''}" role="alertdialog" aria-modal="true"><h2>${esc(d.title)}</h2>${d.body.map((l) => `<p>${l}</p>`).join('')}
       <div class="dlg-btns">${d.buttons.map((b) => `<button class="big-btn ${b.kind || ''} press" data-act="dlg" data-i="${b.i}">${esc(b.label)}</button>`).join('')}</div></div>`;
   }
   function ask({ title, body, buttons }) {
@@ -417,11 +428,32 @@ export function createUI({ root, store, haptics = true, onReload }) {
     openSheet({ kind: 'log', appId, date, digits: '', fresh: false, ...extra });
   }
   function switchSheet(sh) { // 뒤로가기 기록을 늘리지 않고 같은 시트 안에서 내용만 바꿈
-    ui.sheet = { error: '', ...sh };
+    ui.sheet = { error: '', _in: ui.sheet && ui.sheet._in, ...sh };
     rerender();
   }
 
   /* ============================== 입력 처리 ============================== */
+  /**
+   * 숫자판을 누를 때: 시트·배경막을 다시 만들지 않고, 숫자 표시부터 숫자판 바로 앞까지(숫자·미리보기·안내·오류)와
+   * 위쪽의 한 줄 안내(지난 기록·잔액)만 바꿉니다. 그래서 깜빡이지 않고 스크롤·포커스가 그대로입니다.
+   */
+  function patchSheet() {
+    const sh = ui.sheet;
+    const body = root.querySelector('.sheet-body');
+    if (!sh || !body) return rerender();
+    const tmp = document.createElement('div');
+    tmp.innerHTML = sheetInner(sh).inner;
+    const cur = body.querySelector('.display'); const np = body.querySelector('.numpad');
+    const nu = tmp.querySelector('.display'); const tnp = tmp.querySelector('.numpad');
+    if (!cur || !np || !nu || !tnp) return rerender();
+    const rm = []; for (let n = cur; n && n !== np; n = n.nextElementSibling) rm.push(n);
+    const add = []; for (let m = nu; m && m !== tnp; m = m.nextElementSibling) add.push(m);
+    rm.forEach((x) => x.remove());
+    add.forEach((x) => np.before(x));
+    const a = body.querySelector('.row-between .prev-line'); const b = tmp.querySelector('.row-between .prev-line');
+    if (a && b && a.innerHTML !== b.innerHTML) a.innerHTML = b.innerHTML;
+  }
+
   function pressKey(k) {
     const sh = ui.sheet;
     if (!sh || sh.digits === undefined) return;
@@ -434,7 +466,7 @@ export function createUI({ root, store, haptics = true, onReload }) {
     if (d.length > 1) d = d.replace(/^0+/, '');
     sh.digits = d;
     sh.error = '';
-    rerender();
+    patchSheet();
   }
 
   async function guarded(fn) {
@@ -801,11 +833,15 @@ export function createUI({ root, store, haptics = true, onReload }) {
 
   store.on(() => rerender());
 
-  // 되돌리기 줄의 남은 초 갱신
+  // 되돌리기의 남은 초: 화면을 다시 그리지 않고 숫자만 바꾼다(0이 되면 그때만 다시 그림)
   setInterval(() => {
-    const had = !!S.undo;
-    store.expireUndo();
-    if (had && S.undo) rerender();
+    const un = S.undo;
+    if (!un) return;
+    const left = Math.ceil((un.expires - store.now()) / 1000);
+    if (left <= 0) { store.expireUndo(); rerender(); return; }
+    root.querySelectorAll('.undo-btn .count, [data-act="undo-sheet"] .count').forEach((el) => {
+      if (el.textContent !== String(left)) el.textContent = String(left);
+    });
   }, 1000);
 
   function showLoginFor(slot) { ui.login = { step: 'pw', slot, error: '', busy: false, show: false }; rerender(); }
