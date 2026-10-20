@@ -125,9 +125,9 @@ begin
   -- 시험용 계정 3개(롤백됨)와 칸 연결
   u1 := gen_random_uuid(); u2 := gen_random_uuid(); u3 := gen_random_uuid();
   insert into auth.users (id, aud, role, email) values
-    (u1, 'authenticated', 'authenticated', 'rls-test-1@pt.example.com'),
-    (u2, 'authenticated', 'authenticated', 'rls-test-2@pt.example.com'),
-    (u3, 'authenticated', 'authenticated', 'rls-test-3@pt.example.com');
+    (u1, 'authenticated', 'authenticated', 'rls-test-b1@pt.example.com'),
+    (u2, 'authenticated', 'authenticated', 'rls-test-b2@pt.example.com'),
+    (u3, 'authenticated', 'authenticated', 'rls-test-b3@pt.example.com');
   update public.pt_auth_state set user_id = u1 where slot = 1;
   update public.pt_auth_state set user_id = u2 where slot = 2;
   update public.pt_auth_state set user_id = u3 where slot = 3;
