@@ -76,3 +76,35 @@
 
 - 비밀번호를 잊은 경우: `supabase/admin/reset_slot.sql` (기록은 보존, 임시 잠금) → 본인이 준비되면 `open_slot.sql` → 곧바로 본인이 새 비밀번호 설정.
 - 사용자3을 쓰게 될 때: `open_slot.sql`의 칸 번호를 3으로 두고 실행 → 곧바로 설정.
+
+## 안드로이드 설치파일(APK)
+
+크롬의 「앱 설치」가 안 되는 폰을 위한 설치파일입니다. Capacitor로 만든 얇은 껍데기가 `https://kwakseok812-spec.github.io/walk-points/`를 그대로 불러옵니다(스마트비서 앱과 같은 Capacitor·GitHub Actions 구조).
+
+| 항목 | 내용 |
+|---|---|
+| 앱 이름 / 패키지 | 걷기 포인트 / `kr.walkpoints.app` (세로 고정, 권한은 인터넷 하나) |
+| 화면 | 웹을 직접 불러옴(`capacitor.config.json`의 `server.url`). **웹 화면을 올리면 앱이 자동으로 최신**이 되어 설치파일을 다시 깔 필요가 없다 |
+| 인터넷이 없을 때 | 처음 열 때 연결이 안 되면 `app-www/offline.html`(연결 안내와 「다시 시도」)이 뜬다. 한 번 열어 본 뒤에는 웹 화면의 서비스워커가 저장해 둔 화면이 열린다 |
+| 뒤로 가기 키 | Capacitor 기본 동작: 웹 화면의 이전 화면(시트 닫기 등) → 더 없으면 앱 닫기 |
+| 아이콘 | 와인색 코인 발자국. 적응형 아이콘(전경 = 코인, 배경 = 와인색) + 옛 기기용 일반·둥근 아이콘 |
+| 소스 위치 | `android/`(안드로이드 프로젝트), `app-www/`(껍데기 첫 화면), `capacitor.config.json`, `package.json` |
+
+### 만드는 법
+- `android/**`, `app-www/**`, `capacitor.config.json`, `package.json`, `.github/workflows/android.yml`이 바뀐 커밋을 `master`에 push하면 GitHub Actions가 자동으로 만든다(웹 화면 파일만 바꾼 커밋은 다시 만들지 않는다). Actions 탭에서 「Build Android APK」 → Run workflow로 직접 돌릴 수도 있다.
+- 결과: 저장소 **Releases > apk-latest > `walk-points.apk`**(로그인 없이 내려받기 가능, 링크 `https://github.com/kwakseok812-spec/walk-points/releases/download/apk-latest/walk-points.apk`). Actions 실행 화면의 Artifacts(`walk-points-apk`)에서도 받을 수 있다.
+- 로컬에서 만들 때: Android SDK와 JDK 21이 있는 PC에서 `npm install` → `npx cap sync android` → `cd android` → `./gradlew assembleDebug`.
+
+### 폰에 설치
+1. 폰 크롬(또는 카카오톡·파일 앱)에서 위 링크로 APK를 받는다.
+2. 받은 파일을 열면 「출처를 알 수 없는 앱 설치」 허용 창이 뜬다. 그 앱(크롬 등)에 대해 「이 출처 허용」을 켜고 설치한다.
+3. 설치 뒤 아이콘으로 열고 사용자1·2 비밀번호를 정하거나 로그인한다.
+4. 보안 검사(Play 프로텍트)가 「검사 요청」을 띄우면 「설치」를 눌러도 된다. 이 앱은 인터넷 권한 하나만 쓴다.
+
+### 서명키(중요)
+- 키 파일과 비밀번호는 저장소에 올리지 않는다. 방식은 우선순위로 정해진다.
+  1. 저장소 Secrets에 `ANDROID_KEYSTORE_B64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`(선택 `ANDROID_KEY_PASSWORD`)가 있으면 그 고정 키로 서명한다(스마트비서와 같은 방식, 가장 안전).
+  2. 없으면 Actions가 첫 빌드 때 새 키를 만들어 Actions 캐시에 저장해 두고 다음 빌드에서 다시 쓴다. 캐시는 7일 동안 쓰이지 않으면 지워질 수 있다.
+  3. 캐시가 지워져 새 키로 만들어지면 **이전에 설치한 앱 위에 덮어설치가 되지 않는다.** 이때는 앱을 지우고 새 파일을 설치해야 하고, 로그인은 다시 해야 한다(기록은 서버에 있어 그대로).
+- 웹 화면은 설치파일과 무관하게 자동으로 최신이 되므로, 설치파일을 다시 깔 일은 아이콘·설정 등을 바꿀 때뿐이다.
+- Release의 노트에 이번 빌드가 어느 방식(secret / cache / new)으로 서명됐는지 적힌다.

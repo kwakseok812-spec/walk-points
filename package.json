@@ -1,0 +1,11 @@
+{
+  "name": "walk-points",
+  "version": "1.0.0",
+  "private": true,
+  "description": "걷기 포인트 안드로이드 설치파일(APK) 래퍼: 웹 화면을 불러오는 얇은 껍데기",
+  "dependencies": {
+    "@capacitor/android": "^8.5.2",
+    "@capacitor/cli": "^8.5.2",
+    "@capacitor/core": "^8.5.2"
+  }
+}

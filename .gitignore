@@ -4,3 +4,14 @@ __pycache__/
 node_modules/
 .env
 *.before-*
+
+# 안드로이드 설치파일 만들기에서 생기는 것들
+node_modules/
+android/.gradle/
+android/build/
+android/app/build/
+android/signing/
+android/capacitor-cordova-android-plugins/
+*.apk
+*.keystore
+*.jks

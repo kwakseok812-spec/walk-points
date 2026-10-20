@@ -1,0 +1,24 @@
+{
+  "appId": "kr.walkpoints.app",
+  "appName": "걷기 포인트",
+  "webDir": "app-www",
+  "backgroundColor": "#7B1E3A",
+  "server": {
+    "url": "https://kwakseok812-spec.github.io/walk-points/",
+    "errorPath": "offline.html",
+    "allowNavigation": [
+      "kwakseok812-spec.github.io"
+    ],
+    "cleartext": false
+  },
+  "android": {
+    "allowMixedContent": false,
+    "webContentsDebuggingEnabled": false
+  },
+  "plugins": {
+    "SystemBars": {
+      "insetsHandling": "css",
+      "initialViewportFitValueHint": "cover"
+    }
+  }
+}
