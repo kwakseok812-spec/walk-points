@@ -7,7 +7,7 @@ import { APP_VERSION } from './config.js';
 
 const SUGGEST_APPS = ['캐시워크', '손목닥터', '에이헬스', '토스 만보기', '신한 쏠 야보', '오늘의 만보기'];
 const SPEND_MEMOS = ['현금 전환', '기프티콘', '쇼핑', '기부', '기타'];
-const FONT_LABEL = { normal: '보통', large: '크게', xlarge: '아주 크게' };
+const FONT_LABEL = { xsmall: '아주 작게', small: '작게', normal: '보통', large: '크게', xlarge: '아주 크게' };
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const num = C.fmtNum;
@@ -216,7 +216,7 @@ export function createUI({ root, store, haptics = true, onReload }) {
     const seg = (k) => `<button class="seg-btn press ${S.settings.font === k ? 'on' : ''}" data-act="set-font" data-v="${k}">${FONT_LABEL[k]}</button>`;
     return `<main class="page"><header class="bar"><button class="back press" data-act="go-home" aria-label="뒤로">${ICON.back}<span>처음 화면</span></button></header>
       <h1 class="page-title">설정</h1>
-      <section class="set"><h2>글씨 크기</h2><div class="seg">${seg('normal')}${seg('large')}${seg('xlarge')}</div></section>
+      <section class="set"><h2>글씨 크기</h2><div class="seg">${seg('xsmall')}${seg('small')}${seg('normal')}${seg('large')}${seg('xlarge')}</div></section>
       <section class="set"><h2>움직임</h2><button class="toggle press ${S.settings.reduceMotion ? 'on' : ''}" data-act="toggle-motion" role="switch" aria-checked="${S.settings.reduceMotion}"><span>움직임 줄이기</span><span class="sw"><i></i></span></button></section>
       <section class="set"><h2>비밀번호</h2><button class="big-btn press" data-act="pw-change">비밀번호 바꾸기</button></section>
       <section class="set"><h2>기기</h2><button class="big-btn press" data-act="logout-all">모든 기기에서 로그아웃</button><p class="muted small pad0">폰을 잃어버렸을 때 눌러 주세요.</p></section>
@@ -385,7 +385,7 @@ export function createUI({ root, store, haptics = true, onReload }) {
 
   function fontSheet() {
     const b = (k, sz) => `<button class="font-opt press ${S.settings.font === k ? 'on' : ''}" data-act="set-font-first" data-v="${k}"><span class="fo-name">${FONT_LABEL[k]}</span><span class="fo-sample" style="font-size:${sz}px">12,345</span></button>`;
-    return `<p class="lead small-lead">글씨 크기를 고르세요.<br><span class="muted">나중에 설정에서 바꿀 수 있습니다.</span></p>${b('normal', 22)}${b('large', 28)}${b('xlarge', 34)}`;
+    return `<p class="lead small-lead">글씨 크기를 고르세요.<br><span class="muted">나중에 설정에서 바꿀 수 있습니다.</span></p>${b('xsmall', 16)}${b('small', 19)}${b('normal', 22)}${b('large', 28)}${b('xlarge', 34)}`;
   }
 
   function pwSheet(sh) {

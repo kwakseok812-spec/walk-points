@@ -1,6 +1,6 @@
 // sw.js - 화면 파일을 폰에 저장해 두어 접속이 느리거나 끊겨도 화면이 열리게 합니다.
 // 화면 파일을 바꿔 올릴 때는 config.js 의 APP_BUILD 와 아래 CACHE 숫자를 함께 올립니다.
-const CACHE = 'pt-shell-v7';
+const CACHE = 'pt-shell-v8';
 const SHELL = [
   './', './index.html', './manifest.webmanifest', './css/app.css',
   './js/main.js', './js/config.js', './js/data.js', './js/store.js', './js/ui.js', './js/calc.js',
