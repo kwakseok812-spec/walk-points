@@ -25,6 +25,7 @@
   --warn-bg: #3a2f12; --warn-ink: #f3d789; --err-bg: #3d1c19; --err-ink: #ffb4ad;
   --sheet: #1b1e1c; --key: #262a27; --shadow: 0 6px 24px rgba(0, 0, 0, .5);
 }
+html[data-font="xxsmall"] { --fs: 12px; --minfs: 11px; }
 html[data-font="xsmall"] { --fs: 14px; --minfs: 12px; }
 html[data-font="small"] { --fs: 16px; --minfs: 14px; }
 html[data-font="large"] { --fs: 20.5px; }

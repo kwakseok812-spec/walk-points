@@ -119,6 +119,9 @@ with sync_playwright() as p:
             pg.wait_for_selector('.sheet')
             check('처음 사용: 정하면 바로 시작, 첫 화면은 글씨 크기 고르기', '글씨 크기' in text(pg, '.sheet'))
             shot(pg, '05_font_pick_390')
+            fv = pg.eval_on_selector_all('.font-opt', 'els => els.map(e => e.dataset.v)')
+            check('처음 사용: 글씨 선택 6개, 가장 작게가 맨 앞', fv == ['xxsmall','xsmall','small','normal','large','xlarge'], str(fv))
+            no_hscroll(pg, '글씨 선택 시트'); clip_check(pg, '글씨 선택 시트')
             pg.click('.font-opt[data-v="large"]')
             pg.wait_for_selector('.home')
             check('글씨 크기: 고르면 저장되어 화면에 반영', pg.evaluate("document.documentElement.dataset.font") == 'large')
@@ -164,6 +167,30 @@ with sync_playwright() as p:
             shot(pg, '14_records_xlarge_390'); no_hscroll(pg, '기록 보기 아주 크게'); clip_check(pg, '기록 보기 아주 크게')
         ctx.close()
 
+    # ---------------- 글씨 가장 작게 (6단계의 맨 앞) ----------------
+    for scheme in ('light', 'dark'):
+        for key, (w, h) in SIZES.items():
+            ctx, pg = new_page(b, w, h, scheme)
+            open_home(pg, 'xxsmall')
+            shot(pg, f'15_home_xxsmall_{scheme}_{key}')
+            no_hscroll(pg, f'홈 가장 작게 {scheme} {key}'); clip_check(pg, f'홈 가장 작게 {scheme} {key}')
+            if w == 390:
+                tap_sizes(pg, f'홈 가장 작게 {scheme}', 56)
+                pg.click('.card >> nth=2'); pg.wait_for_selector('.sheet')
+                shot(pg, f'16_sheet_log_xxsmall_{scheme}_390')
+                no_hscroll(pg, f'입력 시트 가장 작게 {scheme}'); clip_check(pg, f'입력 시트 가장 작게 {scheme}')
+                tap_sizes(pg, f'입력 시트 가장 작게 {scheme}', 56, '.sheet')
+                pg.click('[data-act="close-sheet"] >> nth=1'); pg.wait_for_timeout(250)
+                pg.click('[data-act="go-settings"]'); pg.wait_for_selector('.seg')
+                shot(pg, f'17_settings_xxsmall_{scheme}_390')
+                no_hscroll(pg, f'설정 가장 작게 {scheme}'); clip_check(pg, f'설정 가장 작게 {scheme}'); tap_sizes(pg, f'설정 가장 작게 {scheme}', 56)
+                labels = pg.eval_on_selector_all('.seg-btn', 'els => els.map(e => e.textContent)')
+                check('설정: 글씨 선택 6개, 가장 작게가 맨 앞', labels == ['가장 작게', '아주 작게', '작게', '보통', '크게', '아주 크게'], str(labels))
+                check('가장 작게: 글자 크기 12px', pg.evaluate("getComputedStyle(document.documentElement).fontSize") == '12px')
+                pg.click('[data-act="go-home"]'); pg.wait_for_selector('.home')
+                pg.click('[data-act="go-records"]'); pg.wait_for_selector('.row')
+                shot(pg, f'18_records_xxsmall_{scheme}_390'); no_hscroll(pg, f'기록 가장 작게 {scheme}'); clip_check(pg, f'기록 가장 작게 {scheme}')
+            ctx.close()
     # ---------------- 입력 시트·저장·다음 앱·확인창 (390 밝게) ----------------
     ctx, pg = new_page(b, 390, 844, 'light')
     open_home(pg)
