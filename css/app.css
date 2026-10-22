@@ -227,7 +227,7 @@ body.has-mock { padding-top: calc(env(safe-area-inset-top) + 28px); }
 .all-done { text-align: center; font-weight: 800; color: var(--accent); font-size: 1.1rem; }
 .font-opt { display: flex; justify-content: space-between; align-items: center; min-height: 72px; padding: 0 20px; border-radius: 16px; border: 2px solid var(--line); background: var(--card); width: 100%; }
 .fo-name { font-weight: 800; font-size: 1.1rem; }
-.fo-sample { font-weight: 800; }
+.fo-sample { font-weight: 800; font-size: var(--sz, 18px); }
 .font-opt.on { border-color: var(--accent); background: var(--accent-soft); }
 
 /* ---------- 확인창 ---------- */
@@ -268,3 +268,98 @@ html[data-reduce="1"] *, html[data-reduce="1"] *::before, html[data-reduce="1"] 
 .pick-app { justify-content: flex-start; font-size: 1.2rem; min-height: 64px; }
 .sticky-save { position: sticky; bottom: 0; z-index: 2; box-shadow: 0 0 0 8px var(--sheet); }
 .two-btn.sticky-save { background: var(--sheet); }
+
+/* ============================================================
+   글씨가 아무리 커져도 화면 안에 들어오게 하는 보강 (O-0603)
+   폰의 시스템 「글자 크기」를 키우면 글자(와 rem 단위 칸 크기)만 커지고 화면 폭은 그대로라서,
+   고정 폭 칸·한 줄짜리 줄이 넘칩니다. 아래는 모두 「넘칠 때만」 줄바꿈·세로 쌓기로 바뀌며,
+   기본 크기에서는 모양이 이전과 같습니다. 되돌리려면 이 블록 전체를 지웁니다.
+   ============================================================ */
+#app, .sheet, .dialog, .toast { overflow-wrap: anywhere; }
+.top, .sum, .c-top, .c-bal, .today-val, .c-diff, .row-between, .hist li, .undo-bar, .toggle, .font-opt, .sheet-head, .row, .trash-row { min-width: 0; }
+.top > *, .sum > *, .c-top > *, .row > *, .row-between > *, .hist li > *, .toggle > *, .font-opt > *, .sheet-head > * { min-width: 0; }
+h1, h2, h3, p, span, div, button { overflow-wrap: anywhere; }
+
+/* 위쪽 줄(날짜·사용자 | 설정) */
+.top { flex-wrap: wrap; gap: 4px 10px; }
+.set-btn { max-width: 100%; }
+
+/* 전체 잔액 */
+.sum { flex-wrap: wrap; gap: 2px 12px; }
+.sum-num { font-size: min(2.1rem, 14vw); }
+
+/* 앱 카드 */
+.card { min-width: 0; }
+.c-top, .c-bal { flex-wrap: wrap; }
+.c-top { gap: 2px 12px; }
+.today-val { flex-wrap: wrap; gap: 0 10px; }
+.tv-num { font-size: min(1.75rem, 11vw); }
+.tv-edit { padding: 0 8px; }
+.b-num { font-size: min(1.15rem, 8vw); }
+.today-none { gap: 6px 12px; }
+
+/* 기록 목록 줄: 한 줄에 못 들어가면 값이 아래 줄로 내려옵니다 */
+.row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 10px; }
+.row .r-l { flex: 0 0 min(5.2rem, 100%); }
+.row .r-m { flex: 1 1 auto; }
+.r-val { font-size: min(1.45rem, 9vw); }
+.row.trash-row .r-l { flex: 1 1 8rem; }
+.row.trash-row .r-m, .row.trash-row > button { flex: 0 1 auto; }
+@media (max-width: 380px) { .row .r-l { flex-basis: min(4.4rem, 100%); } }
+
+/* 이름 바꾸기·필터 칩·단추 안 글자는 줄바꿈 허용 */
+.chip-f, .seg-btn, .tab, .big-btn, .mini, .link, .back, .set-btn, .undo-btn, .chip-date { white-space: normal; text-align: center; }
+.chip-f { max-width: 100%; padding-top: 6px; padding-bottom: 6px; }
+.link, .back { text-align: left; }
+.back { padding-top: 6px; padding-bottom: 6px; }
+.seg { grid-template-columns: repeat(auto-fit, minmax(min(100%, max(4.4rem, 30%)), 1fr)); }
+.seg-btn { padding: 6px 4px; }
+.tabs { grid-template-columns: repeat(auto-fit, minmax(min(100%, max(4.6rem, 30%)), 1fr)); }
+.tab { padding: 6px 4px; }
+.toggle { gap: 12px; text-align: left; padding: 8px 16px; }
+.sw { flex: none; }
+.font-opt { flex-wrap: wrap; gap: 4px 12px; padding: 10px 20px; text-align: left; }
+.chip-date { max-width: 100%; padding: 6px 12px 6px 16px; }
+.hist li { flex-wrap: wrap; }
+.sheet-head { gap: 8px; }
+.sheet-head h2 { min-width: 0; padding: 6px 0; }
+.sheet-head .icon-btn { flex: none; }
+
+/* 숫자 표시줄: 아주 큰 글씨에서 숫자가 길면 줄을 바꿔서라도 다 보이게 */
+.display { flex-wrap: wrap; align-content: center; overflow: hidden; word-break: break-all; padding-top: 8px; padding-bottom: 8px; }
+.display .minus { margin-right: auto; }
+.key { padding: 4px; line-height: 1.3; }
+
+/* 아래에 붙는 줄(되돌리기 줄 + 아래 단추): 맨 아래에 붙어 있되 내용 위에 겹쳐 얹지 않고 자리를 차지합니다 */
+.home, .page.has-bottom { display: flex; flex-direction: column; min-height: calc(100vh - env(safe-area-inset-top)); min-height: calc(100dvh - env(safe-area-inset-top)); }
+.home { padding-bottom: 0; }
+.page.has-bottom { padding-bottom: 0; }
+.home > .cards, .page.has-bottom > .list { flex: 0 0 auto; }
+.dock { position: sticky; bottom: 0; z-index: 10; margin: auto -16px 0; }
+.page:not(.has-bottom) > .dock { margin: 24px -16px 0; }
+.dock .bottom { position: static; max-width: none; margin: 0; }
+.dock .undo-bar { position: static; max-width: none; margin: 0 12px 4px; flex-wrap: wrap; }
+.dock .undo-btn { margin-left: auto; }
+.home > .cards { padding-bottom: 12px; }
+.page.has-bottom > .chips { margin-top: 0; } /* 세로 여백 겹침(collapse)이 사라져 생기는 차이를 맞춤 */
+.page.has-bottom > .trash-link { margin-bottom: 12px; }
+.bottom.three { grid-template-columns: repeat(auto-fit, minmax(min(100%, max(4.2rem, 30%)), 1fr)); }
+.bottom .big-btn { padding-left: 6px; padding-right: 6px; }
+
+.dialog { max-height: 92vh; max-height: 92dvh; }
+.dialog h2, .dialog p { overflow-wrap: anywhere; }
+.notice, .banner { overflow-wrap: anywhere; }
+.btn-row, .b-btns { flex-wrap: wrap; }
+
+/* 한 줄짜리 격자(grid)는 칸 폭을 「내용 크기」가 아니라 「화면 폭」으로 정해야, 내용이 길어도 칸 안에서 줄바꿈됩니다 */
+.cards, .card, .list, .stack, .set, .field, .sheet-body, .dialog, .dlg-btns, .saved-actions, .saved-body, .saved-head, .login-head { grid-template-columns: minmax(0, 1fr); }
+.display { flex-wrap: nowrap; font-size: min(2.3rem, calc((min(100vw, 640px) - 80px) / (var(--n, 6) * .64))); }
+.font-opt .fo-name { flex: 1 1 auto; min-width: 0; text-align: left; }
+.font-opt .fo-sample { flex: 0 1 auto; text-align: right; }
+/* 시트 안은 위에서 아래로 쌓는 줄(flex)로 둡니다. 격자(grid)로 두면 큰 글씨에서 칸 높이가 내용보다 낮게 잡히는 경우가 있습니다 */
+.sheet-body { display: flex; flex-direction: column; align-content: normal; gap: 8px; }
+.sheet-body > * { flex: none; }
+.dock.flow { position: static; }
+.numpad { grid-auto-rows: auto; align-items: stretch; }
+.key { height: auto; display: flex; align-items: center; justify-content: center; }
+.key { font-size: min(1.7rem, 12vw, 56px); }

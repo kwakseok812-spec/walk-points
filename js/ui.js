@@ -64,6 +64,7 @@ export function createUI({ root, store, haptics = true, onReload }) {
     const html = S.phase === 'login' ? loginHtml() : S.phase === 'app' ? appHtml() : '<div class="boot">불러오는 중입니다…</div>';
     root.innerHTML = html + sheetHtml() + dialogHtml();
     { const nb = root.querySelector('.sheet-body'); if (nb && sbTop) nb.scrollTop = sbTop; if (winY && Math.abs(window.scrollY - winY) > 1) window.scrollTo(0, winY); }
+    fitDisplays(); fitDock();
     document.documentElement.dataset.font = S.settings.font;
     document.documentElement.dataset.reduce = S.settings.reduceMotion ? '1' : '0';
 
@@ -153,9 +154,11 @@ export function createUI({ root, store, haptics = true, onReload }) {
       <section class="sum"><span class="sum-lbl">전체 잔액</span><span class="sum-num">${num(total)}</span></section>
       ${banners()}
       <section class="cards">${sums.length ? cards : empty}</section>
-      ${undoBarHtml()}
-      <nav class="bottom"><button class="big-btn press" data-act="go-records">기록 보기</button><button class="big-btn primary press" data-act="add-app">앱 추가</button></nav></main>`;
+      ${dockHtml(undoBarHtml(), '<nav class="bottom"><button class="big-btn press" data-act="go-records">기록 보기</button><button class="big-btn primary press" data-act="add-app">앱 추가</button></nav>')}</main>`;
   }
+
+  // 아래에 붙는 줄(되돌리기 줄 + 아래 단추). 글씨가 커져 단추가 두 줄이 되어도 서로 겹치거나 내용을 가리지 않게 한 덩어리로 묶는다.
+  function dockHtml(undo, nav) { return undo || nav ? `<div class="dock">${undo}${nav}</div>` : ''; }
 
   function undoBarHtml() {
     const u = S.undo;
@@ -198,8 +201,8 @@ export function createUI({ root, store, haptics = true, onReload }) {
       <h1 class="page-title">기록 보기</h1>${banners()}
       <div class="chips" role="tablist">${chips}</div>${manage}
       <section class="list">${rows || '<p class="muted pad">아직 기록이 없습니다.</p>'}</section>
-      <button class="big-btn press trash-link" data-act="go-trash">휴지통${trashCount ? ` <span class="count-badge">${trashCount}</span>` : ''}</button>${undoBarHtml()}
-      <nav class="bottom three"><button class="big-btn press" data-act="rec-add-log">기록 추가</button><button class="big-btn press" data-act="rec-add-spend">사용 추가</button><button class="big-btn primary press" data-act="add-app">앱 추가</button></nav></main>`;
+      <button class="big-btn press trash-link" data-act="go-trash">휴지통${trashCount ? ` <span class="count-badge">${trashCount}</span>` : ''}</button>
+      ${dockHtml(undoBarHtml(), '<nav class="bottom three"><button class="big-btn press" data-act="rec-add-log">기록 추가</button><button class="big-btn press" data-act="rec-add-spend">사용 추가</button><button class="big-btn primary press" data-act="add-app">앱 추가</button></nav>')}</main>`;
   }
 
   function trashHtml() {
@@ -209,7 +212,7 @@ export function createUI({ root, store, haptics = true, onReload }) {
         <button class="mini press" data-act="restore" data-kind="${it.kind}" data-id="${it.row.id}">되살리기</button></div>`).join('');
     return `<main class="page"><header class="bar"><button class="back press" data-act="go-records" aria-label="뒤로">${ICON.back}<span>기록 보기</span></button></header>
       <h1 class="page-title">휴지통</h1><p class="muted pad">지운 것은 30일 동안 여기에 있다가 완전히 지워집니다.</p>
-      <section class="list">${rows || '<p class="muted pad">휴지통이 비어 있습니다.</p>'}</section>${undoBarHtml()}</main>`;
+      <section class="list">${rows || '<p class="muted pad">휴지통이 비어 있습니다.</p>'}</section>${dockHtml(undoBarHtml(), '')}</main>`;
   }
 
   function settingsHtml() {
@@ -384,7 +387,7 @@ export function createUI({ root, store, haptics = true, onReload }) {
   }
 
   function fontSheet() {
-    const b = (k, sz) => `<button class="font-opt press ${S.settings.font === k ? 'on' : ''}" data-act="set-font-first" data-v="${k}"><span class="fo-name">${FONT_LABEL[k]}</span><span class="fo-sample" style="font-size:${sz}px">12,345</span></button>`;
+    const b = (k, sz) => `<button class="font-opt press ${S.settings.font === k ? 'on' : ''}" data-act="set-font-first" data-v="${k}"><span class="fo-name">${FONT_LABEL[k]}</span><span class="fo-sample" style="--sz:${sz}px">12,345</span></button>`;
     return `<p class="lead small-lead">글씨 크기를 고르세요.<br><span class="muted">나중에 설정에서 바꿀 수 있습니다.</span></p>${b('xxsmall', 14)}${b('xsmall', 16)}${b('small', 19)}${b('normal', 22)}${b('large', 28)}${b('xlarge', 34)}`;
   }
 
@@ -459,6 +462,23 @@ export function createUI({ root, store, haptics = true, onReload }) {
     add.forEach((x) => np.before(x));
     const a = body.querySelector('.row-between .prev-line'); const b = tmp.querySelector('.row-between .prev-line');
     if (a && b && a.innerHTML !== b.innerHTML) a.innerHTML = b.innerHTML;
+    fitDisplays();
+  }
+
+  // 아래 줄이 화면의 3분의 1을 넘게 커지면(시스템 글씨를 아주 크게 해 둔 경우 등) 붙박이를 풀어 내용 끝에 놓습니다. 내용 볼 자리를 지키기 위해서입니다.
+  function fitDock() {
+    const d = root.querySelector('.dock'); if (!d) return;
+    d.classList.remove('flow');
+    if (d.offsetHeight > window.innerHeight * 0.34) d.classList.add('flow');
+  }
+  window.addEventListener('resize', () => fitDock());
+
+  // 숫자 표시줄: 글자 수에 맞춰 글자 크기 상한을 CSS 변수(--n)로 알려 줍니다. 아주 큰 글씨에서도 숫자가 한 줄에 다 보이게.
+  function fitDisplays() {
+    root.querySelectorAll('.display').forEach((d) => {
+      const n = d.querySelector('.ph') ? 5 : Math.max(5, d.textContent.replace(/\s/g, '').length);
+      d.style.setProperty('--n', String(n));
+    });
   }
 
   function pressKey(k) {

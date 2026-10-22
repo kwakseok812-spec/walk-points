@@ -16,7 +16,7 @@
 | `supabase/functions/pt-auth/` | 로그인 함수. `index.single.ts`(편집기에 붙여넣는 단일 파일), `logic.js`(앱·시험과 공유하는 규칙, 단일 파일 안에 같은 내용이 복사되어 있고 시험이 일치를 검사) |
 | `supabase/admin/` | 칸 초기화·열기 SQL (관리자용) |
 | `supabase/tests/rls_test.sql` | 사용자 분리 서버 시험 (되돌림 트랜잭션) |
-| `tests/` | 자동 시험 (`node --test tests/*.test.mjs`, `python tests/ui_check.py`) |
+| `tests/` | 자동 시험 (`node --test tests/*.test.mjs`, `python tests/ui_check.py`, `python tests/zoom_check.py` = 폰 시스템 글씨 배율 1.0/1.3/1.5/2.0에서 화면이 넘치지 않는지) |
 
 ## 서버를 붙일 때 순서 (새 Supabase 프로젝트 기준)
 
